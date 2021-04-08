@@ -88,8 +88,9 @@ const createCompiler = rawOptions => {
 	compiler.hooks.environment.call();
 	compiler.hooks.afterEnvironment.call();
 
-	// process 主要用来处理 config 文件中除了 plugins 的其他属性
-	// 例如：entry、output 等
+	// WebpackOptionsApply().process 主要用来处理 config 文件中除了 plugins 的其他属性
+	// 这个东西非常重要，会将配置的一些属性转换成插件注入到 webpack 中 
+	// 例如：入口 entry 就被转换成了插件注入到 webpack 中 
 	new WebpackOptionsApply().process(options, compiler);
 	// 调用 initialize 钩子
 	compiler.hooks.initialize.call();
@@ -150,11 +151,13 @@ const webpack = /** @type {WebpackFunctionSingle & WebpackFunctionMulti} */ (
 		/**
 		 * 判断在执行 webpack 函数的时候，有没有传入 callback 回调函数
 		 * 无论有没有传入回调函数，结果都是会返回一个 compiler 对象
+		 * 差别是：传入了 callback，会调用 compiler.run，没有传入，需要在使用 webpack 拿到 compiler 之后手动调用 compiler.run
 		 */
 		if (callback) {
 			try {
 				const { compiler, watch, watchOptions } = create();
 				if (watch) {
+					// config 文件有没有配置 watch，如果有，会监听文件改变，重新编译
 					compiler.watch(watchOptions, callback);
 				} else {
 					compiler.run((err, stats) => {

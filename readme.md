@@ -59,6 +59,33 @@ compiler.run((err, stats) => {
 
 
 
+webpack.config.js:
+
+```js
+const path = require('path')
+
+module.exports = {
+  entry: './src/index.js',
+  output: {
+    filename: 'bundle.js',
+    path: path.resolve(__dirname, 'dist')
+  },
+  mode: "development",
+	devtool: "source-map",
+  module: {
+    rules: [
+      {
+        test: /\.js$/,
+        use: ['babel-loader']
+      }
+    ]
+  },
+  plugins: []
+}
+```
+
+
+
 ## webpack 的 compiler
 
 webpack 有两个主要的核心对象，一个是 compiler，另外一个是 compilation
@@ -102,6 +129,7 @@ const webpack = (options, callback) => {
         try {
             const { compiler, watch, watchOptions } = create();
             if (watch) {
+                // config 文件有没有配置 watch，如果有，会监听文件改变，重新编译
                 compiler.watch(watchOptions, callback);
             } else {
                 compiler.run((err, stats) => {
@@ -134,6 +162,7 @@ const webpack = (options, callback) => {
 接着，会判断 webpack 函数执行的时候有没有传入 callback：
 
 - 传入了 callback，通过 create 函数拿到 compiler 对象，执行 compiler.run，并把 compiler 返回
+  - 里面还有一层判断 config 文件有没有配置 watch，如果有，会监听文件改变，重新编译
 - 没有传入 callback，通过 create 函数拿到 compiler 对象，直接返回 compiler 
 
 所以，我们在调用 weback 函数的时候，callback 可以传也可以不传，不传 callback 就需要手动调用一下 compiler.run，例如：
@@ -184,8 +213,9 @@ const createCompiler = rawOptions => {
 	compiler.hooks.environment.call();
 	compiler.hooks.afterEnvironment.call();
     
-    // process 主要用来处理 config 文件中除了 plugins 的其他属性
-	// 例如：entry、output 等
+    // WebpackOptionsApply().process 主要用来处理 config 文件中除了 plugins 的其他属性
+	// 这个函数非常重要，会将配置的一些属性转换成插件注入到 webpack 中 
+	// 例如：入口 entry 就被转换成了插件注入到 webpack 中 
 	new WebpackOptionsApply().process(options, compiler);
 	// 调用 initialize 钩子
 	compiler.hooks.initialize.call();
@@ -205,6 +235,51 @@ createCompiler 函数主要的逻辑就是：
 5. 调用 compiler 身上的一些钩子
 6. WebpackOptionsApply().process 处理 config 文件中除了 plugins 的其他属性
 7. 返回 compiler
+
+
+
+看看 WebpackOptionsApply().process （webpack/lib/WebpackOptionsApply.js）这个函数，这个函数非常重要，会将配置的一些属性转换成插件注入到 webpack 中，例如：入口 entry 就被转换成了插件注入到 webpack 中 
+
+```js
+class WebpackOptionsApply extends OptionsApply {
+    // ...
+    
+    /**
+	 * 这个方法的作用：将传入的 webpack.config.js 的属性（例如 devtool）转换成 webpack 的 plugin 注入到 webpack 的生命周期中
+	 * 导入后就是进行例如：new ChunkPrefetchPreloadPlugin().apply(compiler) 的过程
+	 * 这些 plugin 后续将通过 tapable 实现钩子的监听，并进行自身逻辑的处理
+	 * 
+	 * 所以，在 webpack 中，插件是非常重要的，贯穿了整个 webpack 的生命周期
+	 */
+    process(options, compiler) {
+        // 根据各种配置情况，决定是否使用一些 plugin
+		if (options.externals) {
+			//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+			const ExternalsPlugin = require("./ExternalsPlugin");
+			new ExternalsPlugin(options.externalsType, options.externals).apply(
+				compiler
+			);
+		}
+        if (options.externalsPresets.node) {
+			const NodeTargetPlugin = require("./node/NodeTargetPlugin");
+			new NodeTargetPlugin().apply(compiler);
+		}
+		if (options.externalsPresets.electronMain) {
+			//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+			const ElectronTargetPlugin = require("./electron/ElectronTargetPlugin");
+			new ElectronTargetPlugin("main").apply(compiler);
+		}
+        
+        //... 这里是一堆根据 webpack.config.js 的配置转换成 plugin 的操作
+        
+        // 处理入口，将 entry: '', 转换成 EntryOptionPlugin 插件进行注入
+		new EntryOptionPlugin().apply(compiler);
+		compiler.hooks.entryOption.call(options.context, options.entry);
+        
+        //....
+    }
+}
+```
 
 
 
@@ -313,12 +388,14 @@ class Compiler {
         // 定义了一个 onCompiled 函数，主要是传给 this.compile 作为执行的回调函数
         const onCompiled = (err, compilation) => {}
         
-        // run，主要是流程： beforeRun 钩子 --> run 钩子 --> this.compile
+        // run，主要是流程： beforeRun 钩子 --> beforeRun 钩子 --> this.compile
 		// 如果遇到 error，就执行 finalCallback
+		// 这里调用 beforeRun、run 主要就是提供 plugin 执行时机
 		const run = () => {
+            // 执行 this.hooks.beforeRun.callAsync，那么在 beforeRun 阶段注册的 plugin 就会在这时执行
 			this.hooks.beforeRun.callAsync(this, err => {
 				if (err) return finalCallback(err);
-
+                // this.hooks.run.callAsync，在 run 阶段注册的 plugin 就会在这时执行
 				this.hooks.run.callAsync(this, err => {
 					if (err) return finalCallback(err);
 

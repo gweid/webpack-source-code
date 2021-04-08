@@ -486,12 +486,15 @@ class Compiler {
 			});
 		};
 
-		// run，主要是流程： beforeRun 钩子 --> run 钩子 --> this.compile
+		// run，主要是流程： beforeRun 钩子 --> beforeRun 钩子 --> this.compile
 		// 如果遇到 error，就执行 finalCallback
+		// 这里调用 beforeRun、run 主要就是提供 plugin 执行时机
 		const run = () => {
+			// 执行 this.hooks.beforeRun.callAsync，那么在 beforeRun 阶段注册的 plugin 就会在这时执行
 			this.hooks.beforeRun.callAsync(this, err => {
 				if (err) return finalCallback(err);
-
+				
+				// this.hooks.run.callAsync，在 run 阶段注册的 plugin 就会在这时执行
 				this.hooks.run.callAsync(this, err => {
 					if (err) return finalCallback(err);
 
@@ -506,6 +509,7 @@ class Compiler {
 
 		// 执行 run
 		if (this.idle) {
+			// 如果是闲置状态
 			this.cache.endIdle(err => {
 				if (err) return finalCallback(err);
 
@@ -1056,6 +1060,7 @@ ${other}`);
 	 * @returns {void}
 	 */
 	compile(callback) {
+		// 初始化 compilation 的参数
 		const params = this.newCompilationParams();
 		this.hooks.beforeCompile.callAsync(params, err => {
 			if (err) return callback(err);

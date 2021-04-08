@@ -67,12 +67,20 @@ class WebpackOptionsApply extends OptionsApply {
 	 * @param {Compiler} compiler compiler object
 	 * @returns {WebpackOptions} options object
 	 */
+	/**
+	 * 这个方法的作用：将传入的 webpack.config.js 的属性（例如 devtool）转换成 webpack 的 plugin 注入到 webpack 的生命周期中
+	 * 导入后就是进行例如：new ChunkPrefetchPreloadPlugin().apply(compiler) 的过程
+	 * 这些 plugin 后续将通过 tapable 实现钩子的监听，并进行自身逻辑的处理
+	 * 
+	 * 所以，在 webpack 中，插件是非常重要的，贯穿了整个 webpack 的生命周期
+	 */
 	process(options, compiler) {
 		compiler.outputPath = options.output.path;
 		compiler.recordsInputPath = options.recordsInputPath || null;
 		compiler.recordsOutputPath = options.recordsOutputPath || null;
 		compiler.name = options.name;
-
+		
+		// 根据各种配置情况，决定是否使用一些 plugin
 		if (options.externals) {
 			//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
 			const ExternalsPlugin = require("./ExternalsPlugin");
@@ -185,6 +193,8 @@ class WebpackOptionsApply extends OptionsApply {
 			).apply(compiler);
 		}
 
+		// 如果配置了 devtool，就根据 devtool 的值不同，转换使用不同的插件
+		// devtool: 'source-map'
 		if (options.devtool) {
 			if (options.devtool.includes("source-map")) {
 				const hidden = options.devtool.includes("hidden");
@@ -275,6 +285,7 @@ class WebpackOptionsApply extends OptionsApply {
 			}).apply(compiler);
 		}
 
+		// 处理入口，将 entry: '', 转换成 EntryOptionPlugin 插件进行注入
 		new EntryOptionPlugin().apply(compiler);
 		compiler.hooks.entryOption.call(options.context, options.entry);
 
