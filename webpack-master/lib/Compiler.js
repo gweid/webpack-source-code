@@ -119,6 +119,9 @@ class Compiler {
 	 * @param {string} context the compilation path
 	 */
 	constructor(context) {
+		// 初始化了一系列的钩子
+		// 使用的是 tapable
+		// tapable，简单来说，就是一个基于事件的流程管理工具，主要基于发布订阅模式实现
 		this.hooks = Object.freeze({
 			/** @type {SyncHook<[]>} */
 			initialize: new SyncHook([]),
@@ -398,6 +401,7 @@ class Compiler {
 
 		let logger;
 
+		// 处理错误的函数
 		const finalCallback = (err, stats) => {
 			if (logger) logger.time("beginIdle");
 			this.idle = true;
@@ -415,7 +419,8 @@ class Compiler {
 		const startTime = Date.now();
 
 		this.running = true;
-
+		
+		// 定义了一个 onCompiled 函数，主要是传给 this.compile 作为执行的回调函数
 		const onCompiled = (err, compilation) => {
 			if (err) return finalCallback(err);
 
@@ -481,6 +486,8 @@ class Compiler {
 			});
 		};
 
+		// run，主要是流程： beforeRun 钩子 --> run 钩子 --> this.compile
+		// 如果遇到 error，就执行 finalCallback
 		const run = () => {
 			this.hooks.beforeRun.callAsync(this, err => {
 				if (err) return finalCallback(err);
@@ -497,6 +504,7 @@ class Compiler {
 			});
 		};
 
+		// 执行 run
 		if (this.idle) {
 			this.cache.endIdle(err => {
 				if (err) return finalCallback(err);

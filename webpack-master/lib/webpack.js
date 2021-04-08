@@ -55,28 +55,45 @@ const createMultiCompiler = (childOptions, options) => {
  * @param {WebpackOptions} rawOptions options object
  * @returns {Compiler} a compiler
  */
+// 创建 compiler
 const createCompiler = rawOptions => {
+	// 格式化、初始化传进来的参数
 	const options = getNormalizedWebpackOptions(rawOptions);
 	applyWebpackOptionsBaseDefaults(options);
+
+	// 通过 new Compiler 得到一个 compiler 对象
 	const compiler = new Compiler(options.context);
+	// 将 options（经过格式化后的 webpack.config.js ）挂载到 compiler 上
 	compiler.options = options;
 	new NodeEnvironmentPlugin({
 		infrastructureLogging: options.infrastructureLogging
 	}).apply(compiler);
+
+	// 注册所有的插件
 	if (Array.isArray(options.plugins)) {
 		for (const plugin of options.plugins) {
 			if (typeof plugin === "function") {
+				// 如果插件是一个函数，用 call 的形式调用这个函数，并把 compiler 当参数
 				plugin.call(compiler, compiler);
 			} else {
+				// 如果插件是对象形式，那么插件身上都会有 apply 这个函数，调用插件的 apply 函数并把 compiler 当参数
+				// 写一个 webpack 插件类似：class MyPlugin = { apply(compiler) {} }
 				plugin.apply(compiler);
 			}
 		}
 	}
 	applyWebpackOptionsDefaults(options);
+
+	// 调用 compiler 身上的两个钩子 environment、afterEnvironment
 	compiler.hooks.environment.call();
 	compiler.hooks.afterEnvironment.call();
+
+	// process 主要用来处理 config 文件中除了 plugins 的其他属性
+	// 例如：entry、output 等
 	new WebpackOptionsApply().process(options, compiler);
+	// 调用 initialize 钩子
 	compiler.hooks.initialize.call();
+	// 返回 compiler
 	return compiler;
 };
 
@@ -104,10 +121,14 @@ const webpack = /** @type {WebpackFunctionSingle & WebpackFunctionMulti} */ (
 		const create = () => {
 			validateSchema(webpackOptionsSchema, options);
 			/** @type {MultiCompiler|Compiler} */
+
+			// 1.定义 compiler、watch、watchOptions
 			let compiler;
 			let watch = false;
 			/** @type {WatchOptions|WatchOptions[]} */
 			let watchOptions;
+
+			// 如果传入的 webpack.config.js 中的配置是数组，一般很少，对象跟函数居多
 			if (Array.isArray(options)) {
 				/** @type {MultiCompiler} */
 				compiler = createMultiCompiler(options, options);
@@ -115,12 +136,21 @@ const webpack = /** @type {WebpackFunctionSingle & WebpackFunctionMulti} */ (
 				watchOptions = options.map(options => options.watchOptions || {});
 			} else {
 				/** @type {Compiler} */
+				// 2.通过 createCompiler 创建一个 compiler
 				compiler = createCompiler(options);
+				// 拿到 webpack.config.js 中的 watch、watchOptions
 				watch = options.watch;
 				watchOptions = options.watchOptions || {};
 			}
+
+			// 返回 compiler, watch, watchOptions
 			return { compiler, watch, watchOptions };
 		};
+		
+		/**
+		 * 判断在执行 webpack 函数的时候，有没有传入 callback 回调函数
+		 * 无论有没有传入回调函数，结果都是会返回一个 compiler 对象
+		 */
 		if (callback) {
 			try {
 				const { compiler, watch, watchOptions } = create();
@@ -139,6 +169,9 @@ const webpack = /** @type {WebpackFunctionSingle & WebpackFunctionMulti} */ (
 				return null;
 			}
 		} else {
+			// 执行 webpack 的时候没有传入回调函数
+
+			// 执行 create 函数，拿到 compiler, watch
 			const { compiler, watch } = create();
 			if (watch) {
 				util.deprecate(
