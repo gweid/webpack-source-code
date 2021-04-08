@@ -1,4 +1,4 @@
-# 
+# webpack 源码阅读
 
 基于 webpack5.24
 
@@ -151,7 +151,195 @@ compiler.run((err, stats) => {
 
 ### 2、创建 compiler
 
+由上面的 webpack() 可以看出，compiler 由 createCompiler 这个函数返回，看看 createCompiler 这个函数（webpack/lib/webpack.js）：
+
+```js
+const createCompiler = rawOptions => {
+    // 格式化、初始化传进来的参数
+	const options = getNormalizedWebpackOptions(rawOptions);
+	applyWebpackOptionsBaseDefaults(options);
+    
+    // 通过 new Compiler 得到一个 compiler 对象
+	const compiler = new Compiler(options.context);
+	// 将 options（经过格式化后的 webpack.config.js ）挂载到 compiler 上
+	compiler.options = options;
+    
+    // ...
+    
+    // 注册所有的插件
+	if (Array.isArray(options.plugins)) {
+		for (const plugin of options.plugins) {
+			if (typeof plugin === "function") {
+				// 如果插件是一个函数，用 call 的形式调用这个函数，并把 compiler 当参数
+				plugin.call(compiler, compiler);
+			} else {
+				// 如果插件是对象形式，那么插件身上都会有 apply 这个函数，调用插件的 apply 函数并把 compiler 当参数
+				// 写一个 webpack 插件类似：class MyPlugin = { apply(compiler) {} }
+				plugin.apply(compiler);
+			}
+		}
+	}
+    
+    // 调用 compiler 身上的两个钩子 environment、afterEnvironment
+	compiler.hooks.environment.call();
+	compiler.hooks.afterEnvironment.call();
+    
+    // process 主要用来处理 config 文件中除了 plugins 的其他属性
+	// 例如：entry、output 等
+	new WebpackOptionsApply().process(options, compiler);
+	// 调用 initialize 钩子
+	compiler.hooks.initialize.call();
+	// 返回 compiler
+	return compiler;
+}
+```
+
+createCompiler 函数主要的逻辑就是：
+
+1. 格式化、初始化传进来的参数
+2. 通过 new Compiler 得到一个 compiler 对象
+3. 将 options（经过格式化后的 webpack.config.js ）挂载到 compiler 上
+4. 注册所有的插件
+   - 如果插件是一个函数，用 call 的形式调用这个函数，并把 compiler 当参数
+   - 如果插件是对象形式，那么插件身上都会有 apply 这个函数，调用插件的 apply 函数并把 compiler 当参数
+5. 调用 compiler 身上的一些钩子
+6. WebpackOptionsApply().process 处理 config 文件中除了 plugins 的其他属性
+7. 返回 compiler
 
 
 
+可以看出，compiler 是通过 new Compiler 这个类得到的，而 new 一个类最主要的就是初始化这个类的 constructor，现在来看看 Compiler 这个类（webpack/lib/Compiler.js）：
+
+```js
+class Compiler {
+    constructor(context) {
+        // 初始化了一系列的钩子
+		// 使用的是 tapable
+		// tapable，简单来说，就是一个基于事件的流程管理工具，主要基于发布订阅模式实现
+        this.hooks = Object.freeze({
+            initialize: new SyncHook([]),
+            
+            // ...
+            
+            beforeRun: new AsyncSeriesHook(["compiler"]),
+            run: new AsyncSeriesHook(["compiler"])
+            
+            // ...
+        })
+        
+        this.webpack = webpack;
+        
+        this.name = undefined;
+		this.parentCompilation = undefined;
+		this.root = this;
+		this.outputPath = "";
+		this.watching = undefined;
+        
+        // ...
+    }
+}
+```
+
+可以看出，new Compiler 最主要的就是做了两件事：
+
+- 使用 tapable 初始化了一系列的钩子
+  - tapable 是什么？简单来说，就是一个基于事件的流程管理工具，主要基于发布订阅模式实现
+  - 这里暂时不展开说 tapable，后面再单独解析
+- 初始化了一些参数，例如 this.outputPath 等等
+
+自此，一个 compiler 对象就创建完成
+
+
+
+### 3、compiler.run()
+
+再回到 build.js 文件 和 webpack() 这个函数：
+
+build.js：
+
+```js
+// 执行 webpack 函数有传回调函数
+// const compiler = webpack(config, (err, stats) => {
+//   if (err) {
+//     console.log(err)
+//   }
+// })
+
+// 执行 webpack 函数没有有传回调函数
+const compiler = webpack(config)
+// 需要手动调用一下 compiler.run
+compiler.run((err, stats) => {
+  if (err) {
+    console.log(err)
+  }
+})
+```
+
+webpack() 函数：
+
+```js
+const webpack = (options, callback) => {
+    if (callback) {
+        const { compiler, watch, watchOptions } = create();
+
+        compiler.run((err, stats) => {
+            // ...
+        });
+
+        return compiler;   
+    }
+}
+```
+
+可以看到，执行 webpack() 函数的重要一步就是调用 compiler.run，现在回到 Compiler 这个类身上,看看 run 方法：
+
+```js
+class Compiler {
+    // ...
+    
+    run(callback) {
+        // ...
+        
+        // 处理错误的函数
+		const finalCallback = (err, stats) => {
+            // ...
+            
+			if (err) {
+				this.hooks.failed.call(err);
+			}
+			this.hooks.afterDone.call(stats);
+		};
+        
+        // 定义了一个 onCompiled 函数，主要是传给 this.compile 作为执行的回调函数
+        const onCompiled = (err, compilation) => {}
+        
+        // run，主要是流程： beforeRun 钩子 --> run 钩子 --> this.compile
+		// 如果遇到 error，就执行 finalCallback
+		const run = () => {
+			this.hooks.beforeRun.callAsync(this, err => {
+				if (err) return finalCallback(err);
+
+				this.hooks.run.callAsync(this, err => {
+					if (err) return finalCallback(err);
+
+					this.readRecords(err => {
+						if (err) return finalCallback(err);
+
+						this.compile(onCompiled);
+					});
+				});
+			});
+		};
+        
+        run();
+    }
+}
+```
+
+从上面可以看出，compiler.run 的主要逻辑：
+
+1. 定义了一个错误处函数 finalCallback
+2. 定义了一个 onCompiled 函数，作为 this.compile 执行的回调函数
+3. 定义了 run，主要流程就是：beforeRun 钩子 --> run 钩子 --> this.compile，如果遇到 error，就执行 finalCallback
+4. 执行 compiler.run 内部定义的 run()
 
