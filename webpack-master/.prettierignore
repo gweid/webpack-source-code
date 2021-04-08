@@ -1,0 +1,11 @@
+package.json
+
+# Ignore test fixtures
+test/*.*
+!test/*.js
+!test/**/webpack.config.js
+!test/**/deprecations.js
+
+# Ignore example fixtures
+examples/*.*
+!examples/**/webpack.config.js
