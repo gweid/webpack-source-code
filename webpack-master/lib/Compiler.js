@@ -1062,21 +1062,29 @@ ${other}`);
 	compile(callback) {
 		// 初始化 compilation 的参数
 		const params = this.newCompilationParams();
+		
+		// 钩子 beforeCompile
 		this.hooks.beforeCompile.callAsync(params, err => {
 			if (err) return callback(err);
-
+			
+			// 钩子 compile
 			this.hooks.compile.call(params);
-
+			
+			// 通过 this.newCompilation 返回一个 compilation 对象
 			const compilation = this.newCompilation(params);
 
 			const logger = compilation.getLogger("webpack.Compiler");
 
 			logger.time("make hook");
+
+			// 钩子 make
 			this.hooks.make.callAsync(compilation, err => {
 				logger.timeEnd("make hook");
 				if (err) return callback(err);
 
 				logger.time("finish make hook");
+
+				// 钩子 finishMake
 				this.hooks.finishMake.callAsync(compilation, err => {
 					logger.timeEnd("finish make hook");
 					if (err) return callback(err);
@@ -1093,6 +1101,8 @@ ${other}`);
 								if (err) return callback(err);
 
 								logger.time("afterCompile hook");
+
+								// 钩子 afterCompile
 								this.hooks.afterCompile.callAsync(compilation, err => {
 									logger.timeEnd("afterCompile hook");
 									if (err) return callback(err);

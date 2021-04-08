@@ -420,9 +420,66 @@ class Compiler {
 3. 定义了 run，主要流程就是：beforeRun 钩子 --> run 钩子 --> this.compile，如果遇到 error，就执行 finalCallback
 4. 执行 compiler.run 内部定义的 run()
 
+而 compiler.run 内部定义的 run 实际上就是调用了 this.compile，也就是 Compiler 上的 compile 方法
+
+
+
+### 4、compiler.compile ()
+
+现在看看 compiler.run 里面调用的 compile 函数
+
+```js
+class Compiler {
+    // ...
+    
+    compile(callback) {
+        // 初始化 compilation 的参数
+		const params = this.newCompilationParams();
+        
+        // 钩子 beforeCompile
+        this.hooks.beforeCompile.callAsync(params, err => {
+            // 钩子 compile
+			this.hooks.compile.call(params);
+            
+            // 通过 this.newCompilation 返回一个 compilation 对象
+			const compilation = this.newCompilation(params);
+            
+            // 钩子 make
+            this.hooks.make.callAsync(compilation, err => {
+                // 钩子 finishMake
+                this.hooks.finishMake.callAsync(compilation, err => {
+                    // 钩子 afterCompile
+                    this.hooks.afterCompile.callAsync(compilation, err => {
+                        
+                    })
+                })
+            })
+        }
+    }
+}
+```
+
+先忽略 compilation 相关的，那么可以看到，compiler.compile() 里面主要就是 5 个钩子的调用
+
+- 钩子 beforeCompile
+- 钩子 compile
+- 钩子 make
+- 钩子 finishMake
+- 钩子 afterCompile
+
+
+
+### 5、run() --> compile() 的一些 hook
+
+![](/imgs/img1.png)
+
+
+
 
 
 ## tapable
+
+
 
 
 
