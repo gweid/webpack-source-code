@@ -420,3 +420,23 @@ class Compiler {
 3. 定义了 run，主要流程就是：beforeRun 钩子 --> run 钩子 --> this.compile，如果遇到 error，就执行 finalCallback
 4. 执行 compiler.run 内部定义的 run()
 
+
+
+## tapable
+
+
+
+## compilation
+
+首先，了解一下 compilation 以及它与 complier 的一个区别
+
+- compiler：webpack 刚开始构建的时候就创建了，并且在整个 wbepack 的生命周期都存在
+
+- compilation：在准备编译某一个模块（例如 index.js）的时候才会创建，主要存在于 compile 到 make 这一段生命周期里面
+
+问题：既然 compiler 存在于 webpack 整个生命周期，那么为什么不直接使用 compiler 而是要搞一个 compilation 出来？
+
+>  比如，通过 watch 开启对文件的监听，如果文件发生变化，那就重新编译。如果这个时候使用 compiler，那么又要进行前面的一堆初始化操作，完全没有必要，只需要对文件重新编译就好，那么就可以创建一个新的 compilation 对文件重新编译。而如果修改了 webpack.config.js 文件，重新执行 npm run build，这个时候就需要使用 compiler 了。
+
+
+
