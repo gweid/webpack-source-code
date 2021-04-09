@@ -113,6 +113,7 @@ const keyedNestedConfig = (value, fn, customKeys) => {
  * @param {WebpackOptions} config input config
  * @returns {WebpackOptionsNormalized} normalized options
  */
+// 初始化、合并传进来的与一些默认的配置
 const getNormalizedWebpackOptions = config => {
 	return {
 		amd: config.amd,

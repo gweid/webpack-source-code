@@ -57,7 +57,7 @@ const createMultiCompiler = (childOptions, options) => {
  */
 // 创建 compiler
 const createCompiler = rawOptions => {
-	// 格式化、初始化传进来的参数
+	// 格式化、初始化传进来的参数（如 output、devserver、plugin 给赋值一些默认的配置格式，防止后面使用时报错）
 	const options = getNormalizedWebpackOptions(rawOptions);
 	applyWebpackOptionsBaseDefaults(options);
 
@@ -65,6 +65,10 @@ const createCompiler = rawOptions => {
 	const compiler = new Compiler(options.context);
 	// 将 options（经过格式化后的 webpack.config.js ）挂载到 compiler 上
 	compiler.options = options;
+
+	// 把 NodeEnvironmentPlugin 插件挂载到compiler实例上
+	// NodeEnvironmentPlugin 插件主要是文件系统挂载到compiler对象上
+	// 如 infrastructureLogger(log插件)、inputFileSystem(文件输入插件)、outputFileSystem(文件输出插件)、watchFileSystem(监听文件输入插件)
 	new NodeEnvironmentPlugin({
 		infrastructureLogging: options.infrastructureLogging
 	}).apply(compiler);
@@ -120,6 +124,7 @@ const webpack = /** @type {WebpackFunctionSingle & WebpackFunctionMulti} */ (
 	 */
 	(options, callback) => {
 		const create = () => {
+			// 检验传入的配置文件【webpack.config.js】是否符合 webpack 内部定义的 webpackOptionsSchema 范式
 			validateSchema(webpackOptionsSchema, options);
 			/** @type {MultiCompiler|Compiler} */
 

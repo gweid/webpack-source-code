@@ -193,6 +193,13 @@ const createCompiler = rawOptions => {
 	// 将 options（经过格式化后的 webpack.config.js ）挂载到 compiler 上
 	compiler.options = options;
     
+    // 把 NodeEnvironmentPlugin 插件挂载到compiler实例上
+	// NodeEnvironmentPlugin 插件主要是文件系统挂载到 compiler 对象上
+	// 如infrastructureLogger(log插件)、inputFileSystem(文件输入插件)、outputFileSystem(文件输出插件)、watchFileSystem(监听文件输入插件)
+	new NodeEnvironmentPlugin({
+		infrastructureLogging: options.infrastructureLogging
+	}).apply(compiler);
+    
     // ...
     
     // 注册所有的插件
@@ -229,12 +236,14 @@ createCompiler 函数主要的逻辑就是：
 1. 格式化、初始化传进来的参数
 2. 通过 new Compiler 得到一个 compiler 对象
 3. 将 options（经过格式化后的 webpack.config.js ）挂载到 compiler 上
-4. 注册所有的插件
+4. NodeEnvironmentPlugin 把文件系统挂载到 compiler 对象上
+   - 如 infrastructureLogger(log插件)、inputFileSystem(文件输入插件)、outputFileSystem(文件输出插件)、watchFileSystem(监听文件输入插件) 等
+5. 注册所有的插件
    - 如果插件是一个函数，用 call 的形式调用这个函数，并把 compiler 当参数
    - 如果插件是对象形式，那么插件身上都会有 apply 这个函数，调用插件的 apply 函数并把 compiler 当参数
-5. 调用 compiler 身上的一些钩子
-6. WebpackOptionsApply().process 处理 config 文件中除了 plugins 的其他属性
-7. 返回 compiler
+6. 调用 compiler 身上的一些钩子
+7. WebpackOptionsApply().process 处理 config 文件中除了 plugins 的其他属性
+8. 返回 compiler
 
 
 
@@ -542,6 +551,62 @@ run.callAsync(compiler)
 问题：既然 compiler 存在于 webpack 整个生命周期，那么为什么不直接使用 compiler 而是要搞一个 compilation 出来？
 
 >  比如，通过 watch 开启对文件的监听，如果文件发生变化，那就重新编译。如果这个时候使用 compiler，那么又要进行前面的一堆初始化操作，完全没有必要，只需要对文件重新编译就好，那么就可以创建一个新的 compilation 对文件重新编译。而如果修改了 webpack.config.js 文件，重新执行 npm run build，这个时候就需要使用 compiler 了。
+
+
+
+### 1、compilation 的创建
+
+回头看看 compiler.compile()【webpack/lib/Compiler.js】 这个函数：
+
+```js
+class Compiler {
+    // ...
+    
+    compile(callback) {
+        // 初始化 compilation 的参数
+		const params = this.newCompilationParams();
+        
+        this.hooks.beforeCompile.callAsync(params, err => {
+            this.hooks.compile.call(params);
+            
+            // 通过 this.newCompilation 返回一个 compilation 对象
+			const compilation = this.newCompilation(params);
+        })
+    }
+}
+```
+
+可以看出来，compilation 由 this.newCompilation() 返回，来看看这个函数：
+
+```js
+class Compiler {
+    // ...
+    
+    newCompilation(params) {
+		const compilation = this.createCompilation();
+		compilation.name = this.name;
+		compilation.records = this.records;
+		this.hooks.thisCompilation.call(compilation, params);
+		this.hooks.compilation.call(compilation, params);
+		return compilation;
+	}
+}
+```
+
+可以看出，compilation 又由 this.createCompilation() 返回
+
+```js
+class Compiler {
+    // ...
+    
+    createCompilation() {
+		this._cleanupLastCompilation();
+		return (this._lastCompilation = new Compilation(this));
+	}
+}
+```
+
+到此，终于可以知道 compilation 其实就是通过 new 一个 Compilation 类得来，并且把 compiler 本身传递给 Compilation 的构造函数 constructor
 
 
 
