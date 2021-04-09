@@ -479,6 +479,54 @@ class Compiler {
 
 ## tapable
 
+### 1、tapable 是什么
+
+`tapable`是`webpack`的核心模块，也是`webpack`团队维护的，是`webpack plugin`的基本实现方式。主要的作用就是：基于事件流程管理
+
+
+
+### 2、tapable 的基本使用
+
+以 AsyncSeriesHook这个 hook 为例：
+
+```js
+const { AsyncSeriesHook } = require("tapable")
+
+// 创建一个 SyncHook 类型的 hook
+const run = new AsyncSeriesHook(["compiler"])
+```
+
+SyncHook 就是 tapable 中提供的某一个用于创建某一类 hook 的类，通过 new 来生成实例。构造函数 constructor 接收一个数组，数组有多少项，**表示生成的这个实例注册回调的时候接收多少个参数**
+
+hook 的主要有两个实例：
+
+- `tap`：就是**注册事件回调**的方法
+- `call`：就是触发事件，**执行 tap 中回调的方法**
+
+所以有，注册事件回调：
+
+```js
+run.tapAsync('myRun', (compiler) => {
+    console.log(compiler)
+})
+```
+
+这样就通过 tab 把事件回调函数注册好了。而这个事件调用时机就是在执行 call 的时候调用
+
+```js
+run.callAsync(compiler)
+```
+
+执行 call，就会调用之前注册的回调，并把 compiler 当做参数传过去
+
+
+
+所以 tabpad 的使用主要就是三步：
+
+1. new 一个 hook 类
+2. 使用 tab 注册回调
+3. 在 call 的时候执行回调
+
 
 
 
