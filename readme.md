@@ -538,6 +538,10 @@ run.callAsync(compiler)
 
 
 
+### 3、一些常用的 tapable hook
+
+https://juejin.cn/post/6939794845053485093
+
 
 
 ## compilation
@@ -610,3 +614,146 @@ class Compiler {
 
 
 
+### 2、compilation 的调用时机
+
+回看上面 compiler.compile() 的代码：
+
+```js
+class Compiler {
+    // ...
+    
+    compile(callback) {
+        // 初始化 compilation 的参数
+		const params = this.newCompilationParams();
+        
+        // 钩子 beforeCompile
+        this.hooks.beforeCompile.callAsync(params, err => {
+            // 钩子 compile
+			this.hooks.compile.call(params);
+            
+            // 通过 this.newCompilation 返回一个 compilation 对象
+			const compilation = this.newCompilation(params);
+            
+            // 钩子 make，// 钩子 make，这个钩子里面就是真正使用 compilation 执行编译的
+            this.hooks.make.callAsync(compilation, err => {
+                // 钩子 finishMake
+                this.hooks.finishMake.callAsync(compilation, err => {
+                    // 钩子 afterCompile
+                    this.hooks.afterCompile.callAsync(compilation, err => {
+                        
+                    })
+                })
+            })
+        }
+    }
+}
+```
+
+这里面有一个非常重要的钩子调用，就是  this.hooks.make.callAsync，这个钩子里面就是真正使用 compilation 执行编译的。
+
+那么这个钩子是什么时候被注册的呢？
+
+1、webpack/lib/webpack.js 中的 createCompiler：
+
+```js
+const createCompiler = rawOptions => {
+    // ...
+    
+    new WebpackOptionsApply().process(options, compiler);
+}
+```
+
+2、WebpackOptionsApply().process() 【webpack/lib/WebpackOptionsApply.js】
+
+```js
+class WebpackOptionsApply extends OptionsApply {
+    // ...
+    
+    process(options, compiler) {
+        //...
+        new EntryOptionPlugin().apply(compiler);
+    }
+}
+```
+
+3、再看 EntryOptionPlugin().apply(compiler)【webpack/lib/EntryOptionPlugin.js】
+
+```js
+class EntryOptionPlugin {
+    apply(compiler) {
+		compiler.hooks.entryOption.tap("EntryOptionPlugin", (context, entry) => {
+			EntryOptionPlugin.applyEntryOption(compiler, context, entry);
+			return true;
+		});
+	}
+    
+    static applyEntryOption(compiler, context, entry) {
+		if (typeof entry === "function") {
+			const DynamicEntryPlugin = require("./DynamicEntryPlugin");
+			new DynamicEntryPlugin(context, entry).apply(compiler);
+		} else {
+			const EntryPlugin = require("./EntryPlugin");
+			for (const name of Object.keys(entry)) {
+				const desc = entry[name];
+				const options = EntryOptionPlugin.entryDescriptionToOptions(
+					compiler,
+					name,
+					desc
+				);
+				for (const entry of desc.import) {
+					new EntryPlugin(context, entry, options).apply(compiler);
+				}
+			}
+		}
+	}
+}
+```
+
+可以看到，EntryOptionPlugin.apply() 主要做的事：就是调用了自身的 applyEntryOption 方法，里面对入口 entry 分情况处理，这里主要看 new EntryPlugin(context, entry, options).apply(compiler) 这个
+
+4、然后来到 EntryPlugin.apply()【webpack\lib\EntryPlugin.js】
+
+```js
+class EntryPlugin {
+    apply(compiler) {
+        // ...
+
+		compiler.hooks.make.tapAsync("EntryPlugin", (compilation, callback) => {
+		});
+	}
+}
+```
+
+终于找到了 compiler.hooks.make.tapAsync，这就是注册了 make hook 回调函数的地方
+
+
+
+通过流程图表示这个注册 compilation 回调的流程：
+
+![](/imgs/img2.png)
+
+
+
+### 3、compilation 对模块进行编译
+
+由上面可知，compilation 是在 make 这个钩子里面执行的，而注册这个钩子的地方，绕了一圈，定位到了 lib\EntryPlugin.js 中 EntryPlugin 这个类的 apply 中 compiler.hooks.make.tapAsync 进行回调注册。现在接着从这个注册回调中分析：
+
+```js
+class EntryPlugin {
+    apply(compiler) {
+        // ...
+
+		compiler.hooks.make.tapAsync("EntryPlugin", (compilation, callback) => {
+			const { entry, options, context } = this;
+
+			const dep = EntryPlugin.createDependency(entry, options);
+            // 通过 compilation 的 addEntry 添加入口，从入口开始编译
+			compilation.addEntry(context, dep, options, err => {
+				callback(err);
+			});
+		});
+	}
+}
+```
+
+可以看到，这个注册回调函数里面调用了 compilation.addEntry()，这个 Compilation 类里面的 addEntry 主要的作用就是添加入口模块，因为编译要从入口文件开始

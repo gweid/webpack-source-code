@@ -30,6 +30,7 @@ class EntryOptionPlugin {
 	 */
 	static applyEntryOption(compiler, context, entry) {
 		if (typeof entry === "function") {
+			// 判断入口，如果是函数，使用 DynamicEntryPlugin 处理
 			const DynamicEntryPlugin = require("./DynamicEntryPlugin");
 			new DynamicEntryPlugin(context, entry).apply(compiler);
 		} else {

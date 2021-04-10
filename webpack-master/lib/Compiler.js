@@ -1077,7 +1077,7 @@ ${other}`);
 
 			logger.time("make hook");
 
-			// 钩子 make
+			// 钩子 make，这个钩子里面就是真正使用 compilation 执行编译的
 			this.hooks.make.callAsync(compilation, err => {
 				logger.timeEnd("make hook");
 				if (err) return callback(err);

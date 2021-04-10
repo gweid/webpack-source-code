@@ -286,6 +286,7 @@ class WebpackOptionsApply extends OptionsApply {
 		}
 
 		// 处理入口，将 entry: '', 转换成 EntryOptionPlugin 插件进行注入
+		// EntryOptionPlugin 中回调函数中会根据 options.entry 的类型再分为两种加载入口插件 DynamicEntryPlugin插件；EntryPlugin插件
 		new EntryOptionPlugin().apply(compiler);
 		compiler.hooks.entryOption.call(options.context, options.entry);
 

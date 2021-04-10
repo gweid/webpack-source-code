@@ -1761,7 +1761,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 			typeof optionsOrName === "object"
 				? optionsOrName
 				: { name: optionsOrName };
-
+        // 添加入口的 item
 		this._addEntryItem(context, entry, "dependencies", options, callback);
 	}
 

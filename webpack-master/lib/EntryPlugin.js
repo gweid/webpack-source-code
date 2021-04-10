@@ -43,8 +43,11 @@ class EntryPlugin {
 
 		compiler.hooks.make.tapAsync("EntryPlugin", (compilation, callback) => {
 			const { entry, options, context } = this;
-
+			
+			// 创建依赖
 			const dep = EntryPlugin.createDependency(entry, options);
+
+			// 调用 compilation 的 addEntry 方法
 			compilation.addEntry(context, dep, options, err => {
 				callback(err);
 			});
