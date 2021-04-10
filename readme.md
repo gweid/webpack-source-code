@@ -404,6 +404,7 @@ class Compiler {
             // 执行 this.hooks.beforeRun.callAsync，那么在 beforeRun 阶段注册的 plugin 就会在这时执行
 			this.hooks.beforeRun.callAsync(this, err => {
 				if (err) return finalCallback(err);
+                
                 // this.hooks.run.callAsync，在 run 阶段注册的 plugin 就会在这时执行
 				this.hooks.run.callAsync(this, err => {
 					if (err) return finalCallback(err);
@@ -540,7 +541,13 @@ run.callAsync(compiler)
 
 ### 3、一些常用的 tapable hook
 
-https://juejin.cn/post/6939794845053485093
+可以参考 https://juejin.cn/post/6939794845053485093
+
+
+
+### 4、tapable 基本原理
+
+可以参考：https://juejin.cn/post/6946094725703139358
 
 
 
@@ -587,6 +594,7 @@ class Compiler {
     // ...
     
     newCompilation(params) {
+        // 调用 this.createCompilation() 返回 compilation
 		const compilation = this.createCompilation();
 		compilation.name = this.name;
 		compilation.records = this.records;
@@ -605,6 +613,7 @@ class Compiler {
     
     createCompilation() {
 		this._cleanupLastCompilation();
+        // new Compilation 创建 compilation
 		return (this._lastCompilation = new Compilation(this));
 	}
 }
@@ -734,7 +743,7 @@ class EntryPlugin {
 
 
 
-### 3、compilation 对模块进行编译
+### 3、compilation 对模块的处理
 
 由上面可知，compilation 是在 make 这个钩子里面执行的，而注册这个钩子的地方，绕了一圈，定位到了 lib\EntryPlugin.js 中 EntryPlugin 这个类的 apply 中 compiler.hooks.make.tapAsync 进行回调注册。现在接着从这个注册回调中分析：
 
@@ -745,8 +754,10 @@ class EntryPlugin {
 
 		compiler.hooks.make.tapAsync("EntryPlugin", (compilation, callback) => {
 			const { entry, options, context } = this;
-
+            
+            // 创建依赖
 			const dep = EntryPlugin.createDependency(entry, options);
+            
             // 通过 compilation 的 addEntry 添加入口，从入口开始编译
 			compilation.addEntry(context, dep, options, err => {
 				callback(err);
@@ -757,3 +768,279 @@ class EntryPlugin {
 ```
 
 可以看到，这个注册回调函数里面调用了 compilation.addEntry()，这个 Compilation 类里面的 addEntry 主要的作用就是添加入口模块，因为编译要从入口文件开始
+
+```js
+class Compilation {
+    // 1 初始化 constructor
+    conscructor() {
+        this.addModuleQueue = new AsyncQueue({
+			name: "addModule",
+			parent: this.processDependenciesQueue,
+			getKey: module => module.identifier(),
+			// processor：处理方法，调用 this._addModule
+			processor: this._addModule.bind(this)
+		});
+		this.factorizeQueue = new AsyncQueue({
+			name: "factorize",
+			parent: this.addModuleQueue,
+			// processor：处理方法，调用 this._factorizeModule
+			processor: this._factorizeModule.bind(this)
+		});
+		this.buildQueue = new AsyncQueue({
+			name: "build",
+			parent: this.factorizeQueue,
+			// processor：处理方法，调用 this._buildModule
+			processor: this._buildModule.bind(this)
+		});
+    }
+    
+    // 2 这个函数的主要作用就是通过 _addEntryItem 添加入口，因为编译需要从入口开始
+	addEntry(context, entry, optionsOrName, callback) {
+        // ...
+
+        // 添加入口
+		this._addEntryItem(context, entry, "dependencies", options, callback);
+	}
+    
+    // 3
+    _addEntryItem(context, entry, target, options, callback) {
+        // ...
+        
+        // 调用 addEntry 钩子
+		this.hooks.addEntry.call(entry, options);
+        // // 调用 this.addModuleTree 将当前的模块加入到 module tree(模块树)
+        this.addModuleTree({}, (err, module) => {})
+    }
+    
+    // 4
+    addModuleTree({ context, dependency, contextInfo }, callback) {
+        // ...
+        
+        // 调用 handleModuleCreation 处理模块并
+        this.handleModuleCreation({}, err => {})
+    }
+    
+    // 5
+    handleModuleCreation(
+		{factory, dependencies, originModule, contextInfo, context, recursive = true},
+		callback
+    )
+    {
+        // 创建了模块图
+        const moduleGraph = this.moduleGraph;
+		
+        // 6
+        this.factorizeModule(
+            {currentProfile,factory,dependencies,originModule,contextInfo,context},
+            (err, newModule) => {
+                
+                /**
+				 * compilation.factorizeModule 执行 factorizeQueue 的 add 方法将模块添加到 factorizeQueue 队列
+				 * factorizeQueue 通过 new AsyncQueue 得到
+				 * 
+				 * factorizeQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__factorizeModule
+				 * 
+				 * compilation._factorizeModule 中再调用 factory.create()
+				 * 通过 compilation.factorizeModule 的回调函数中接收 factorizeQueue.add 返回的 newModule
+				 * 最后通过 compilation.addModule 添加 newModule 模块
+				 */
+                
+                // 9
+                this.addModule(newModule, (err, module) => {
+                    
+                    /**
+					 * compilation.addModule 执行 addModuleQueue.add 将模块添加到 addModuleQueue
+					 * addModuleQueue 通过 new AsyncQueue 创建
+					 * 
+					 * addModuleQueue.add=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation._addModule
+					 * 
+					 * 在 compilation.addModule 的回调中继续调用 compilation.buildModule
+					 */
+                    
+                    // 12
+                    this.buildModule(module, err => {
+                        
+                        /**
+						 * compilation.buildModule 执行 buildQueue.add 将 module 添加到 buildQueue
+						 * buildQueue 通过 new AsyncQueue 创建
+						 * 
+						 * buildQueue.add=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation._buildModule
+						 * 
+						 * compilation._buildModule 里面执行 module.needBuild 判断模块需不需要构建
+						 * 需要构建，执行 module.needBuild 的回调，回调里面执行 module.build 对模块进行构建
+						 * this.buildModule 回调里面继续调用 compilation.processModuleDependencies
+						 */
+                        
+                        // 15
+                        this.processModuleDependencies(module, err => {
+                            
+                        })
+                    })
+                })
+            }
+        )
+    }
+     
+    // 7
+    factorizeModule(options, callback) {
+		this.factorizeQueue.add(options, callback);
+	}
+    // 8
+    _factorizeModule(
+		{currentProfile,factory,dependencies,originModule,contextInfo,context},
+		callback
+	) 
+    {
+        // 对模块进行解析【执行NormalModuleFactory实例上的create方法】
+		factory.create({}, (err, result) => {})
+    }
+    
+    // 10
+    addModule(module, callback) {
+		// 将模块添加到 addModuleQueue
+		this.addModuleQueue.add(module, callback);
+	}
+    // 11
+    _addModule(module, callback) {
+        // ...
+        
+        // 添加创建的 module 到 modules
+        this._modules.set(identifier, module);
+        this.modules.add(module);
+        
+        // ...
+    }
+    
+    // 13
+    buildModule(module, callback) {
+		this.buildQueue.add(module, callback);
+	}
+    // 14
+    _buildModule(module, callback) {
+        // ...
+        
+        // 判断当前模块需不需要构建，需要构建就执行回调
+        module.needBuild({}, (err, needBuild) => {
+            // ...
+            
+		    // 对模块进行构建
+			// 但是这里直接点进 module.build 里面，会发现里面只是抛出了一个错误
+			// 其实这里是使用了多态，module.build 是类 Moudle 上的方法，同时 Module 是一个父类
+			// 其他子类继承父类 Moudle，并对 build 方法进行重写
+			// 所以这里的 module.build 方法其实是 NormalModule 类继承了 Module 类并对重写的 build 方法
+		    module.build({}, err => {})
+        })
+    }
+}
+```
+
+1. compilation.addEntry：调用 compilation._addEntryItem 添加入口
+2.  compilation._addEntryItem：调用 addEntry 钩子。然后通过 compilation.addModuleTree 将当前的模块加入到 module tree(模块树)
+3. compilation.addModuleTree：调用 compilation.handleModuleCreation 处理模块并对模块进行创建
+4. compilation.handleModuleCreation：
+   - 创建了模块图
+   - 调用 compilation.factorizeModule
+5. compilation.factorizeModule：
+   - 执行 factorizeQueue 的 add 方法将模块添加到 factorizeQueue 队列
+     - compilation.factorizeQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__factorizeModule=>factory.create()
+   - 执行回调，回调中执行 compilation.addModule
+6. compilation.addModule：
+   - 执行 addModuleQueue.add 将模块添加到 addModuleQueue 队列
+     - compilation.addModuleQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__addModule
+   - 执行回调，回调中继续调用 compilation.buildModule
+7. compilation.buildModule：
+   - 执行 addModuleQueue.add 将模块添加到 addModuleQueue 队列
+     - compilation.buildQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__buildModule
+
+其实 compilation 对模块进行处理，简单来说就是：
+
+1. compilation.addEntry=>compilation._addEntryItem，通过入口将模块添加到 module tree(模块树)
+2. 然后调用了 compilation.handleModuleCreation，在里面通过不断的回调，执行了以下几步：
+   1. compilation.factorizeModule 系列：处理模块并对模块进行创建，并且添加到 factorizeQueue 队列
+   2. compilation.addModule 系列：添加 module 模块
+   3. compilation.buildModule 系列：准备编译
+
+
+
+简单的流程图：
+
+![](/imgs/img3.png)
+
+
+
+### 4、进行模块编译构建
+
+模块的构建从 compilation.buildModule 开始
+
+```js
+class Compilation {
+    conscructor() {
+		this.buildQueue = new AsyncQueue({
+			name: "build",
+			parent: this.factorizeQueue,
+			// processor：处理方法，调用 this._buildModule
+			processor: this._buildModule.bind(this)
+		});
+    }
+    
+    handleModuleCreation(
+		{factory, dependencies, originModule, contextInfo, context, recursive = true},
+		callback
+    )
+    {
+        this.factorizeModule(
+            {currentProfile,factory,dependencies,originModule,contextInfo,context},
+            (err, newModule) => {
+
+                this.addModule(newModule, (err, module) => {
+
+                    this.buildModule(module, err => {
+                        
+                        /**
+						 * compilation.buildModule 执行 buildQueue.add 将 module 添加到 buildQueue
+						 * buildQueue 通过 new AsyncQueue 创建
+						 * 
+						 * buildQueue.add=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation._buildModule
+						 * 
+						 * compilation._buildModule 里面执行 module.needBuild 判断模块需不需要构建
+						 * 需要构建，执行 module.needBuild 的回调，回调里面执行 module.build 对模块进行构建
+						 * this.buildModule 回调里面继续调用 compilation.processModuleDependencies
+						 */
+                        
+                        // 15
+                        this.processModuleDependencies(module, err => {
+                            
+                        })
+                    })
+                })
+            }
+        )
+    }
+    
+    buildModule(module, callback) {
+		this.buildQueue.add(module, callback);
+	}
+    _buildModule(module, callback) {
+        // ...
+        
+        // 判断当前模块需不需要构建，需要构建就执行回调
+        module.needBuild({}, (err, needBuild) => {
+            // ...
+            
+		    // 对模块进行构建
+			// 但是这里直接点进 module.build 里面，会发现里面只是抛出了一个错误
+			// 其实这里是使用了多态，module.build 是类 Moudle 上的方法，同时 Module 是一个父类
+			// 其他子类继承父类 Moudle，并对 build 方法进行重写
+			// 所以这里的 module.build 方法其实是 NormalModule 类继承了 Module 类并对重写的 build 方法
+		    module.build({}, err => {})
+        })
+    }
+}
+```
+
+compilation.buildModule=>compilation.buildQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__buildModule
+
+可以看出最后是执行了 compilation.__buildModule，这个方法里面：
+
+- 判断当前模块需不需要构建，需要构建就执行回调
+- 回调中调用 module.build 对模块开始进行构建

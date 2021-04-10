@@ -835,18 +835,21 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 			name: "addModule",
 			parent: this.processDependenciesQueue,
 			getKey: module => module.identifier(),
+			// processor：处理方法，调用 this._addModule
 			processor: this._addModule.bind(this)
 		});
 		/** @type {AsyncQueue<FactorizeModuleOptions, string, Module>} */
 		this.factorizeQueue = new AsyncQueue({
 			name: "factorize",
 			parent: this.addModuleQueue,
+			// processor：处理方法，调用 this._factorizeModule
 			processor: this._factorizeModule.bind(this)
 		});
 		/** @type {AsyncQueue<Module, Module, Module>} */
 		this.buildQueue = new AsyncQueue({
 			name: "build",
 			parent: this.factorizeQueue,
+			// processor：处理方法，调用 this._buildModule
 			processor: this._buildModule.bind(this)
 		});
 		/** @type {AsyncQueue<Module, Module, Module>} */
@@ -1134,6 +1137,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 	 * @returns {void}
 	 */
 	addModule(module, callback) {
+		// 将模块添加到 addModuleQueue
 		this.addModuleQueue.add(module, callback);
 	}
 
@@ -1170,8 +1174,11 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 
 				module = cacheModule;
 			}
+
+			// 添加创建的 module 到 modules
 			this._modules.set(identifier, module);
 			this.modules.add(module);
+
 			ModuleGraph.setModuleGraphForModule(module, this.moduleGraph);
 			if (currentProfile !== undefined) {
 				currentProfile.markIntegrationEnd();
@@ -1225,6 +1232,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 			currentProfile.markBuildingStart();
 		}
 
+		// 判断当前模块需不需要构建，需要构建就执行回调
 		module.needBuild(
 			{
 				fileSystemInfo: this.fileSystemInfo,
@@ -1243,6 +1251,12 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 
 				this.hooks.buildModule.call(module);
 				this.builtModules.add(module);
+
+				// 对模块进行构建
+				// 但是这里直接点进 module.build 里面，会发现里面只是抛出了一个错误
+				// 其实这里是使用了多态，module.build 是类 Moudle 上的方法，同时 Module 是一个父类
+				// 其他子类继承父类 Moudle，并对 build 方法进行重写
+				// 所以这里的 module.build 方法其实是 NormalModule 类继承了 Module 类并对重写的 build 方法
 				module.build(
 					this.options,
 					this,
@@ -1449,10 +1463,12 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 		},
 		callback
 	) {
+		// 创建了模块图
 		const moduleGraph = this.moduleGraph;
 
 		const currentProfile = this.profile ? new ModuleProfile() : undefined;
-
+		
+		// 执行 factorizeModule 函数，将传入的参数加到队列 factorizeQueue
 		this.factorizeModule(
 			{
 				currentProfile,
@@ -1463,6 +1479,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 				context
 			},
 			(err, newModule) => {
+				// this.factorizeModule 执行完会将新模块 newModule 返回，接下来就是拿到新模块进行处理
 				if (err) {
 					if (dependencies.every(d => d.optional)) {
 						this.warnings.push(err);
@@ -1479,6 +1496,17 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 				if (currentProfile !== undefined) {
 					moduleGraph.setProfile(newModule, currentProfile);
 				}
+
+				/**
+				 * compilation.factorizeModule 执行 factorizeQueue 的 add 方法将模块添加到 factorizeQueue 队列
+				 * factorizeQueue 通过 new AsyncQueue 得到
+				 * 
+				 * factorizeQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__factorizeModule
+				 * 
+				 * compilation._factorizeModule 中再调用 factory.create()
+				 * 通过 compilation.factorizeModule 的回调函数中接收 factorizeQueue.add 返回的 newModule
+				 * 最后通过 compilation.addModule 添加 newModule 模块
+				 */
 
 				this.addModule(newModule, (err, module) => {
 					if (err) {
@@ -1549,6 +1577,15 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 							}
 						}
 					}
+					
+					/**
+					 * compilation.addModule 执行 addModuleQueue.add 将模块添加到 addModuleQueue
+					 * addModuleQueue 通过 new AsyncQueue 创建
+					 * 
+					 * addModuleQueue.add=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation._addModule
+					 * 
+					 * 在 compilation.addModule 的回调中继续调用 compilation.buildModule
+					 */
 
 					this.buildModule(module, err => {
 						if (creatingModuleDuringBuildSet !== undefined) {
@@ -1573,6 +1610,17 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 						if (this.processDependenciesQueue.isProcessing(module)) {
 							return callback();
 						}
+
+						/**
+						 * compilation.buildModule 执行 buildQueue.add 将 module 添加到 buildQueue
+						 * buildQueue 通过 new AsyncQueue 创建
+						 * 
+						 * buildQueue.add=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation._buildModule
+						 * 
+						 * compilation._buildModule 里面执行 module.needBuild 判断模块需不需要构建
+						 * 需要构建，执行 module.needBuild 的回调，回调里面执行 module.build 对模块进行构建
+						 * this.buildModule 回调里面继续调用 compilation.processModuleDependencies
+						 */
 
 						this.processModuleDependencies(module, err => {
 							if (err) {
@@ -1602,6 +1650,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 	 * @returns {void}
 	 */
 	factorizeModule(options, callback) {
+		// 将模块添加到 factorizeQueue
 		this.factorizeQueue.add(options, callback);
 	}
 
@@ -1624,6 +1673,8 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 		if (currentProfile !== undefined) {
 			currentProfile.markFactoryStart();
 		}
+
+		// 对模块进行解析
 		factory.create(
 			{
 				contextInfo: {
@@ -1726,6 +1777,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 			);
 		}
 
+		// 处理模块并对模块进行创建
 		this.handleModuleCreation(
 			{
 				factory: moduleFactory,
@@ -1755,13 +1807,15 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 	 * @param {ModuleCallback} callback callback function
 	 * @returns {void} returns
 	 */
+	// 这个函数的主要作用就是通过 _addEntryItem 添加入口，因为编译需要从入口开始
 	addEntry(context, entry, optionsOrName, callback) {
 		// TODO webpack 6 remove
 		const options =
 			typeof optionsOrName === "object"
 				? optionsOrName
 				: { name: optionsOrName };
-        // 添加入口的 item
+
+        // 添加入口文件
 		this._addEntryItem(context, entry, "dependencies", options, callback);
 	}
 
@@ -1828,9 +1882,11 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 				}
 			}
 		}
-
+		
+		// 调用 addEntry 钩子
 		this.hooks.addEntry.call(entry, options);
-
+		
+		// 调用 this.addModuleTree 将当前的模块加入到 module tree(模块树)
 		this.addModuleTree(
 			{
 				context,
