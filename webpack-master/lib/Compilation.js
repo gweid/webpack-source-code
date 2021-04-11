@@ -2190,7 +2190,11 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 	 * @param {Callback} callback signals when the call finishes
 	 * @returns {void}
 	 */
+	// 当模块解析完，就来到了 seal 阶段，对处理过的代码进行封装输出
+	// 目的是将 module 生成 chunk，并封存到 compilation.assets 中
+	// 在这个过程可以做各种各样的优化
 	seal(callback) {
+		// 生成 chunkGraph 实例
 		const chunkGraph = new ChunkGraph(this.moduleGraph);
 		this.chunkGraph = chunkGraph;
 
@@ -2198,6 +2202,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 			ChunkGraph.setChunkGraphForModule(module, chunkGraph);
 		}
 
+		// 触发 seal 钩子
 		this.hooks.seal.call();
 
 		this.logger.time("optimize dependencies");
@@ -2262,6 +2267,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 				modulesList.push(module);
 			}
 		}
+
 		const runtimeChunks = new Set();
 		outer: for (const [
 			name,
@@ -2333,32 +2339,43 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 				entry.setRuntimeChunk(chunk);
 			}
 		}
+
+		// 用于创建 chunkGraph、moduleGraph
 		buildChunkGraph(this, chunkGraphInit);
 		this.hooks.afterChunks.call(this.chunks);
 		this.logger.timeEnd("create chunks");
 
 		this.logger.time("optimize");
+
+		// 触发钩子 optimize，代表优化开始
 		this.hooks.optimize.call();
 
+		// 执行各种优化 module
 		while (this.hooks.optimizeModules.call(this.modules)) {
 			/* empty */
 		}
+		// 钩子 afterOptimizeModules，代表 module 已经优化完
 		this.hooks.afterOptimizeModules.call(this.modules);
-
+		
+		// 执行各种优化 chunk
 		while (this.hooks.optimizeChunks.call(this.chunks, this.chunkGroups)) {
 			/* empty */
 		}
+		// 钩子 afterOptimizeChunks，代表 chunk 已经优化完
 		this.hooks.afterOptimizeChunks.call(this.chunks, this.chunkGroups);
 
+		// 优化 modules 树
 		this.hooks.optimizeTree.callAsync(this.chunks, this.modules, err => {
 			if (err) {
 				return callback(
 					makeWebpackError(err, "Compilation.hooks.optimizeTree")
 				);
 			}
-
+			
+			// 触发 afterOptimizeTree 钩子，代表 modules 树优化结束
 			this.hooks.afterOptimizeTree.call(this.chunks, this.modules);
 
+			// 对代码进行优化阶段
 			this.hooks.optimizeChunkModules.callAsync(
 				this.chunks,
 				this.modules,
@@ -2368,6 +2385,8 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 							makeWebpackError(err, "Compilation.hooks.optimizeChunkModules")
 						);
 					}
+
+					// 下面是触发各种优化的钩子
 
 					this.hooks.afterOptimizeChunkModules.call(this.chunks, this.modules);
 
@@ -2399,12 +2418,16 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 
 					this.logger.time("module hashing");
 					this.hooks.beforeModuleHash.call();
+					// 生成 module 的 hash
 					this.createModuleHashes();
 					this.hooks.afterModuleHash.call();
 					this.logger.timeEnd("module hashing");
 
 					this.logger.time("code generation");
 					this.hooks.beforeCodeGeneration.call();
+
+					// 代码生成的阶段
+					// 调用 codeGeneration 方法用于生成编译好的代码
 					this.codeGeneration(err => {
 						if (err) {
 							return callback(err);
@@ -2423,7 +2446,9 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 						const codeGenerationJobs = this.createHash();
 						this.hooks.afterHash.call();
 						this.logger.timeEnd("hashing");
-
+						
+						// 执行代码生成的方法 _runCodeGenerationJobs
+						// _runCodeGenerationJobs 中会执行 this._codeGenerationModule，这个方法会根据 tempalte 生成代码 
 						this._runCodeGenerationJobs(codeGenerationJobs, err => {
 							if (err) {
 								return callback(err);
@@ -2439,6 +2464,7 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 							this.clearAssets();
 
 							this.hooks.beforeModuleAssets.call();
+							// 创建 moduleAssets 资源
 							this.createModuleAssets();
 							this.logger.timeEnd("module assets");
 
@@ -2485,6 +2511,8 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 							this.logger.time("create chunk assets");
 							if (this.hooks.shouldGenerateChunkAssets.call() !== false) {
 								this.hooks.beforeChunkAssets.call();
+
+								// 创建 chunkAssets 资源
 								this.createChunkAssets(err => {
 									this.logger.timeEnd("create chunk assets");
 									if (err) {
@@ -2587,6 +2615,7 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 			jobs,
 			this.options.parallelism,
 			({ module, hash, runtime, runtimes }, callback) => {
+				// 根据 template 生成代码
 				this._codeGenerationModule(
 					module,
 					runtime,
@@ -3440,6 +3469,7 @@ This prevents using hashes of each other and should be avoided.`);
 			this._setAssetInfo(file, newInfo, oldInfo);
 			return;
 		}
+		// 将生成的代码放到 compilation.assets 中
 		this.assets[file] = source;
 		this._setAssetInfo(file, assetInfo, undefined);
 	}
@@ -3817,6 +3847,10 @@ This prevents using hashes of each other and should be avoided.`);
 										}
 									}
 								}
+
+								// 开始输出资源
+								// emitAsset 方法主要是将生成的代码放到 compilation.assets 中
+								// 后面执行回调，调用 compiler.
 								this.emitAsset(file, source, assetInfo);
 								if (fileManifest.auxiliary) {
 									chunk.auxiliaryFiles.add(file);

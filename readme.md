@@ -454,13 +454,22 @@ class Compiler {
             // 通过 this.newCompilation 返回一个 compilation 对象
 			const compilation = this.newCompilation(params);
             
-            // 钩子 make
+            // 钩子 make, 使用 compilation 对模块执行编译的
             this.hooks.make.callAsync(compilation, err => {
                 // 钩子 finishMake
                 this.hooks.finishMake.callAsync(compilation, err => {
-                    // 钩子 afterCompile
-                    this.hooks.afterCompile.callAsync(compilation, err => {
+                    process.nextTick(() => {
                         
+                        // 执行compilation的 finsh 方法 对 module 上的错误或者警告处理
+                        compilation.finish(err => {
+                            
+                            // 执行 seal 对 module 代码进行封装输出
+                            compilation.seal(err => {
+                                
+                                // 钩子 afterCompile
+                                this.hooks.afterCompile.callAsync(compilation, err => {})
+                            })
+                        })
                     })
                 })
             })
@@ -473,8 +482,10 @@ class Compiler {
 
 - 钩子 beforeCompile
 - 钩子 compile
-- 钩子 make
+- 钩子 make：使用 compilation 对模块执行编译的
 - 钩子 finishMake
+- compilation.finish
+- compilation.seal：执行 seal 对 make 阶段处理过的 module 代码进行封装输出
 - 钩子 afterCompile
 
 
@@ -767,7 +778,7 @@ class EntryPlugin {
 }
 ```
 
-可以看到，这个注册回调函数里面调用了 compilation.addEntry()，这个 Compilation 类里面的 addEntry 主要的作用就是添加入口模块，因为编译要从入口文件开始
+可以看到，这个注册回调函数里面调用了 compilation.addEntry()，这个 Compilation 类里面的 addEntry 主要的作用就是添加入口模块
 
 ```js
 class Compilation {
@@ -968,7 +979,9 @@ class Compilation {
 
 
 
-### 4、进行模块编译构建
+## 进行模块编译构建(build)
+
+### 1、从 compilation.buildModule 开始
 
 模块的构建从 compilation.buildModule 开始
 
@@ -1042,5 +1055,342 @@ compilation.buildModule=>compilation.buildQueue.add()=>setImmediate(root._ensure
 
 可以看出最后是执行了 compilation.__buildModule，这个方法里面：
 
-- 判断当前模块需不需要构建，需要构建就执行回调
+- module.needBuild：判断当前模块需不需要构建，需要构建就执行回调
 - 回调中调用 module.build 对模块开始进行构建
+
+这里注意一下，module.build点进去是：
+
+```js
+class Module extends DependenciesBlock  {
+    // ...
+    
+    build(options, compilation, resolver, fs, callback) {
+		const AbstractMethodError = require("./AbstractMethodError");
+		throw new AbstractMethodError();
+	}
+}
+```
+
+发现，这里的 Module类的 build 就只是抛出了一个错误。其实这里用的是多态的概念， Module 只是一个父类，后面的子类可以继承 Module，并对里面的 build 方法进行改写。这里实际上执行的并不是 Module 的 build，而是它的子类 NormalModule 的 build。
+
+可以通过光标在 Module 上，鼠标右键打开菜但，点击 find all Implementations 找到
+
+![](/imgs/img4.png)
+
+打开 webpack\lib\NormalModule.js 文件，可以看到：
+
+```js
+class NormalModule extends Module {
+    // ...
+    
+    build(options, compilation, resolver, fs, callback) {
+        
+    }
+}
+```
+
+NormalModule 类继承于 Module 类，并重写了 build
+
+所以，实际上，module.build 就是调用的 NormalModule 类的 build 方法
+
+
+
+### 2、模块构建 build
+
+module.build 也就是 NormalModule 类的 build 方法：
+
+```js
+class NormalModule extends Module {
+    // ...
+    
+    build(options, compilation, resolver, fs, callback) {
+        // ...
+        
+        // 将 doBuild 函数执行后的返回值返回
+        return this.doBuild(options, compilation, resolver, fs, err => {})
+    }
+}
+```
+
+NormalModule 类的 build 方法中将 doBuild 函数的结果返回。来到 doBuild 方法：
+
+```js
+const { runLoaders } = require("loader-runner");
+
+class NormalModule extends Module {
+    // ...
+    
+    doBuild(options, compilation, resolver, fs, callback) {
+        // ...
+        
+        // 定义 processResult 函数，主要用来处理 runLoaders 执行后的结果
+        const processResult = (err, result) => {})
+        
+        // doBuild 的核心：执行所有的 loader 对匹配到的模块【test: /\.js$/】进行转换
+		// 转换后的结果交给 processResult 处理
+		// runLoaders 来自 webpack 官方维护的 loader-runner 库
+		runLoaders(
+			{
+				resource: this.resource, // 需要编译的模块路径
+				loaders: this.loaders, // 传入 loader
+				context: loaderContext,
+				// processResource：需要做的进一步操作
+				processResource: (loaderContext, resource, callback) => {
+                    // ...
+                    
+                    loaderContext.addDependency(resource);
+                    // 读取模块文件
+                    fs.readFile(resource, callback);
+				}
+			},
+			(err, result) => {
+                // ...
+				processResult(err, result.result);
+			}
+		);
+    }
+}
+```
+
+doBuild 中定义了 processResult，用来处理 runLoaders 执行后的结果
+
+runLoaders： runLoaders 来自 webpack 官方维护的 loader-runner 库，主要用来执行 loader 对匹配到的模块进行转换，最后在回调中将转换后的结果交给 processResult 去处理
+
+```js
+class NormalModule extends Module {
+    // ...
+    
+    doBuild(options, compilation, resolver, fs, callback) {
+        // ...
+        
+        // 定义 processResult 函数，主要用来处理 runLoaders 执行后的结果
+        const processResult = (err, result) => {
+            const source = result[0];
+            
+            return callback();
+        })
+
+		runLoaders({}, (err, result) => {
+                // ...
+				processResult(err, result.result);
+			}
+		);
+    }
+}
+```
+
+processResult 做的事就是拿到 loader 转换之后的结果 `const source = result[0]`,最后调用 callback，这个 callback 是 doBuild 上的 callback
+
+```js
+class NormalModule extends Module {
+    // ...
+    
+    build(options, compilation, resolver, fs, callback) {
+        // ...
+        
+        // 将 doBuild 函数执行后的返回值返回
+        return this.doBuild(options, compilation, resolver, fs, err => {
+            // ...
+            
+            result = this.parser.parse(this._ast || this._source.source(), {
+                current: this,
+                module: this,
+                compilation: compilation,
+                options: options
+            })
+        })
+    }
+}
+```
+
+可以看到执行 doBuild 的 callback 中有一步是 this.parser.parse，这一步就是进行 AST 转换
+
+这个 this.parser.parse 方法主要就是：webpack\lib\javascript\JavascriptParser.js
+
+ 中的 JavascriptParser 类的 parse 方法
+
+```js
+const { Parser: AcornParser } = require("acorn");
+
+const parser = AcornParser;
+
+class JavascriptParser extends Parser {
+    // ...
+    
+    parse(source, state) {
+        ast = JavascriptParser._parse(source, {
+            sourceType: this.sourceType,
+            onComment: comments,
+            onInsertedSemicolon: pos => semicolons.add(pos)
+        });
+    }
+    
+    static _parse(code, options) {
+        let ast
+        ast = parser.parse(code, parserOptions)
+    }
+}
+```
+
+可以看出，在 parse 中继续调用 \_parse 方法生成  ast，_parse 中生成 ast 利用了 acorn 库的 Parser
+
+问题：为什么还要进行 ast 转换？
+
+> 因为需要分析模块代码，看看当前模块还需要依赖于哪些模块，对依赖的模块继续进行编译，这是一步递归的过程。
+
+到此，buildModule=>_buildModule=>module.build 的工作基本完成。
+
+
+
+接下来就回到了 compilation.processModuleDependencies 对 module 递归进行依赖收集
+
+```js
+class Compilation {
+    conscructor() {
+        this.processDependenciesQueue = new AsyncQueue({
+			name: "processDependencies",
+			parallelism: options.parallelism || 100,
+			processor: this._processModuleDependencies.bind(this)
+		});
+    }
+    
+    handleModuleCreation() {
+        this.factorizeModule(
+            {currentProfile,factory,dependencies,originModule,contextInfo,context},
+            (err, newModule) => {
+
+                this.addModule(newModule, (err, module) => {
+
+                    this.buildModule(module, err => {
+
+                        this.processModuleDependencies(module, err => {
+                            
+                        })
+                    })
+                })
+            }
+        )
+    }
+    
+    processModuleDependencies(module, callback) {
+		this.processDependenciesQueue.add(module, callback);
+	}
+    _processModuleDependencies(module, callback) {
+        // ...
+        
+        const processDependenciesBlock = block => {
+			if (block.dependencies) {
+				currentBlock = block;
+				for (const dep of block.dependencies) processDependency(dep);
+			}
+			if (block.blocks) {
+				for (const b of block.blocks) processDependenciesBlock(b);
+			}
+		};
+        
+        // 收集依赖
+        processDependenciesBlock(module);
+        
+        // 循环执行 compilation.handleModuleCreation 再进行模块转换、依赖收集
+        asyncLib.forEach(
+			sortedDependencies,
+			(item, callback) => {
+				this.handleModuleCreation(item, err => {}});
+			},
+			err => {}
+		);
+    }
+}
+```
+
+- 执行 compilation.processModuleDependencies(module, callback) 并且传入 buildModule 生成的 module实例；
+
+- 执行 compilation._processModuleDependencies(module, callback)，通过 processDependenciesBlock 进行收集依赖；
+
+- 循环执行 compilation.handleModuleCreation 再进行模块转换、依赖收集
+
+总结就是收集依赖模块，并对依赖模块再进行相同的模块处理
+
+
+
+到这里，make 阶段算是完结。
+
+
+
+## 对处理完成的模块 module 封装输出
+
+```js
+class Compiler {
+    // ...
+    
+    compile(callback) {
+        // 初始化 compilation 的参数
+		const params = this.newCompilationParams();
+        
+        // 钩子 beforeCompile
+        this.hooks.beforeCompile.callAsync(params, err => {
+            // 钩子 compile
+			this.hooks.compile.call(params);
+            
+            // 通过 this.newCompilation 返回一个 compilation 对象
+			const compilation = this.newCompilation(params);
+            
+            // 钩子 make
+            this.hooks.make.callAsync(compilation, err => {
+                // 钩子 finishMake
+                this.hooks.finishMake.callAsync(compilation, err => {
+                    process.nextTick(() => {
+                        
+                        // 执行compilation的finsh方法 对modules上的错误或者警告处理
+                        // finsh中会执行compilation.hooks.finishModules钩子
+                        compilation.finish(err => {
+                            
+                            // 执行seal 对 module 代码进行封装输出
+                            compilation.seal(err => {
+                                
+                                // 钩子 afterCompile
+                                this.hooks.afterCompile.callAsync(compilation, err => {})
+                            })
+                        })
+                    })
+                })
+            })
+        }
+    }
+}
+```
+
+又回到 compiler.compile，可以看到，在 make 钩子函数完成之后：
+
+1. 执行当前 compilation 上的 finsh 方法，对生成的 modules时产生的错误或者警告进行处理。 
+
+2. 执行 compilation.seal 对上一个阶段处理完成的 modules 进行封装输出，会生成 chunk 和 assets 等信息，根据不同的 template 生成要输出的代码
+
+
+
+
+
+## 附录
+
+可以参考的一些优秀文章：
+
+https://juejin.cn/post/6948950633814687758
+
+https://segmentfault.com/a/1190000023016373
+
+https://juejin.cn/post/6844903693070909447
+
+https://www.cnblogs.com/pluslius/p/10271537.html
+
+https://juejin.cn/post/6844904000169607175
+
+
+
+一些 webpack4 的流程图
+
+![](/imgs/img5.png)
+
+
+
+![](/imgs/img6.jpg)
+

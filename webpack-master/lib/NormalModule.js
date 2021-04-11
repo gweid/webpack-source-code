@@ -666,6 +666,7 @@ class NormalModule extends Module {
 			fs
 		);
 
+		// 定义 processResult 函数，主要用来处理 runLoaders 执行后的结果
 		const processResult = (err, result) => {
 			if (err) {
 				if (!(err instanceof Error)) {
@@ -681,7 +682,8 @@ class NormalModule extends Module {
 				});
 				return callback(error);
 			}
-
+			
+			// 拿到 loader 的转换后的结果
 			const source = result[0];
 			const sourceMap = result.length >= 1 ? result[1] : null;
 			const extraInfo = result.length >= 2 ? result[2] : null;
@@ -714,6 +716,7 @@ class NormalModule extends Module {
 				extraInfo.webpackAST !== undefined
 					? extraInfo.webpackAST
 					: null;
+			// 执行 doBuild 的 callback
 			return callback();
 		};
 
@@ -725,11 +728,16 @@ class NormalModule extends Module {
 			processResult(err);
 			return;
 		}
+
+		// doBuild 的核心：执行所有的 loader 对匹配到的模块【test: /\.js$/】进行转换
+		// 转换后的结果交给 processResult 处理
+		// runLoaders 来自 webpack 官方维护的 loader-runner 库
 		runLoaders(
 			{
-				resource: this.resource,
-				loaders: this.loaders,
+				resource: this.resource, // 需要编译的模块路径
+				loaders: this.loaders, // 传入 loader
 				context: loaderContext,
+				// processResource：需要做的进一步操作
 				processResource: (loaderContext, resource, callback) => {
 					const scheme = getScheme(resource);
 					if (scheme) {
@@ -744,6 +752,7 @@ class NormalModule extends Module {
 							});
 					} else {
 						loaderContext.addDependency(resource);
+						// 读取模块文件
 						fs.readFile(resource, callback);
 					}
 				}
@@ -874,6 +883,7 @@ class NormalModule extends Module {
 
 		const startTime = Date.now();
 
+		// 将 doBuild 的结果返回
 		return this.doBuild(options, compilation, resolver, fs, err => {
 			// if we have an error mark module as failed and exit
 			if (err) {

@@ -438,6 +438,8 @@ class Compiler {
 			process.nextTick(() => {
 				logger = compilation.getLogger("webpack.Compiler");
 				logger.time("emitAssets");
+				
+				// 输出结果
 				this.emitAssets(compilation, err => {
 					logger.timeEnd("emitAssets");
 					if (err) return finalCallback(err);
@@ -1091,11 +1093,16 @@ ${other}`);
 
 					process.nextTick(() => {
 						logger.time("finish compilation");
+
+						// 执行compilation的finsh方法 对modules上的错误或者警告处理
+                        // finsh中会执行compilation.hooks.finishModules钩子
 						compilation.finish(err => {
 							logger.timeEnd("finish compilation");
 							if (err) return callback(err);
 
 							logger.time("seal compilation");
+
+							// 执行seal 对 module 代码进行封装输出
 							compilation.seal(err => {
 								logger.timeEnd("seal compilation");
 								if (err) return callback(err);
