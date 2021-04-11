@@ -1362,11 +1362,176 @@ class Compiler {
 
 又回到 compiler.compile，可以看到，在 make 钩子函数完成之后：
 
-1. 执行当前 compilation 上的 finsh 方法，对生成的 modules时产生的错误或者警告进行处理。 
+1. 会调用 finishMake，然后执行当前 compilation 上的 finsh 方法，对生成的 modules时产生的错误或者警告进行处理。 
+2. compilation.finish 回调里面继续执行 compilation.seal 对上一个阶段处理完成的 modules 进行封装输出，会生成 chunk 和 assets 等信息，根据不同的 template 生成要输出的代码
 
-2. 执行 compilation.seal 对上一个阶段处理完成的 modules 进行封装输出，会生成 chunk 和 assets 等信息，根据不同的 template 生成要输出的代码
 
 
+这里有几个概念，先看看：
+
+- module：模块，就是不同的资源文件，包括 `js/css/图片` 等文件，在编译阶段，webpack 会根据个个模块的依赖关系组合生成 chunk
+- moduleGraph：各个 module 之间的依赖关系，生成 chunkGraph 要用到
+- chunk：由一个或者多个 module 组成
+- chunkGroup：由一个或者多个 chunk 组成，生成 chunkGraph 要用到
+- chunkGraph：用于储存 module、chunk、chunkGroup 三者之间的关系
+
+
+
+回到 compilation.seal：
+
+```js
+class Compilation {
+    // ...
+    
+    _runCodeGenerationJobs(jobs, callback) {
+        // 根据 template 生成代码
+        this._codeGenerationModule();
+    },
+    
+    _codeGenerationModule() {},
+    
+    createChunkAssets(callback) {
+        asyncLib.forEach(
+			this.chunks,
+            (chunk, callback) => {
+                asyncLib.forEach(
+                    this.chunks,
+                    (chunk, callback) => {
+                        // ...
+                        
+                        // 开始输出资源
+					    this.emitAsset(file, source, assetInfo);
+                    },
+                    callback
+                )
+            },
+            callback
+        )
+    },
+    
+    // 当模块解析完，就来到了 seal 阶段，对处理过的代码进行封装输出
+	// 目的是将 module 生成 chunk，并封存到 compilation.assets 中
+	// 在这个过程可以做各种各样的优化
+    seal(callback) {
+        // 生成 chunkGraph 实例
+		const chunkGraph = new ChunkGraph(this.moduleGraph);
+        
+        // 触发 seal 钩子
+		this.hooks.seal.call();
+        
+        // 循环 this.entries 入口文件创建 chunks
+        for (const [name, { dependencies, includeDependencies, options }] of this.entries) {
+            // ...
+        }
+        
+        // 用于创建 chunkGraph、moduleGraph
+		buildChunkGraph(this, chunkGraphInit);
+        
+        // 触发钩子 optimize，代表优化开始
+		this.hooks.optimize.call();
+        
+        // 执行各种优化 module
+		while (this.hooks.optimizeModules.call(this.modules)) {
+			/* empty */
+		}
+		// 钩子 afterOptimizeModules，代表 module 已经优化完
+		this.hooks.afterOptimizeModules.call(this.modules);
+		
+		// 执行各种优化 chunk
+		while (this.hooks.optimizeChunks.call(this.chunks, this.chunkGroups)) {
+			/* empty */
+		}
+		// 钩子 afterOptimizeChunks，代表 chunk 已经优化完
+		this.hooks.afterOptimizeChunks.call(this.chunks, this.chunkGroups);
+        
+        // 优化 modules 树
+        this.hooks.optimizeTree.callAsync(this.chunks, this.modules, err => {
+            
+            // 触发 afterOptimizeTree 钩子，代表 modules 树优化结束
+			this.hooks.afterOptimizeTree.call(this.chunks, this.modules);
+            
+            // 对代码进行优化阶段
+			this.hooks.optimizeChunkModules.callAsync(
+                this.chunks,
+                this.modules,
+                err => {
+                    // 触发一系列各种优化的钩子，省略代码
+                    
+                    // 生成 module 的 hash
+					this.createModuleHashes();
+                    
+                    //  调用 codeGeneration 方法用于生成编译好的代码
+                    this.codeGeneration(err => {
+                        // 执行代码生成的方法 _runCodeGenerationJobs
+						// _runCodeGenerationJobs 中会执行 this._codeGenerationModule，这个方法会根据 tempalte 生成代码 
+                        this._runCodeGenerationJobs(codeGenerationJobs, err => {
+                            // ...
+                            
+                            // 创建 moduleAssets 资源
+							this.createModuleAssets();
+                            
+                            // 创建 chunkAssets 资源
+                            // createChunkAssets 里面会调用 compilation.emitAsset 开始输出
+                            this.createChunkAssets(err => {});
+                        })
+                    })
+                }
+            )
+        })
+    }
+}
+```
+
+总结一下 compilation.seal 的主要流程：
+
+1. 循环 this.entries 入口文件创建 chunks
+2. 执行各种优化 module、chunk、module tree
+3. 调用 compilation.codeGeneration 方法用于生成编译好的代码
+4. 执行代码生成的方法 compilation.\_runCodeGenerationJobs
+   - \_runCodeGenerationJobs 中会执行 compilation._codeGenerationModule，这个方法会根据 tempalte 生成代码
+5. 执行 compilation.createChunkAssets 创建 chunkAssets 资源，createChunkAssets 里面会调用 compilation.emitAsset 将生成的代码放到 compilation.assets 中，然后一路回调，最后的回调就是用的createChunkAssets(callback) 中的 callback，然后一路找回调，会发现最后调用的回调是 compilation.seal(callback)这里的，而 compilation.seal 在 compiler.compile 中被调用，此时，又回到了 compiler
+
+```js
+class Compiler {
+    compile(callback) {
+        compilation.seal(err => {
+            this.hooks.afterCompile.callAsync(compilation, err => {
+                // ...
+                return callback(null, compilation);
+            })
+        })
+    }
+}
+```
+
+继续找回调，发现 compilation.seal 被  compiler.compile 调用时又使用了 compiler.compile 的 callback，再看看 compiler.compile 被调用的情况：
+
+```js
+class Compiler {
+    run(callback) {
+        / 定义了一个 onCompiled 函数，主要是传给 this.compile 作为执行的回调函数
+        const onCompiled = (err, compilation) => {
+            process.nextTick(() => {
+                this.emitAssets(compilation, err => {
+                    this.emitRecords(err => {})
+                })
+            })
+        })
+        
+        const run = () => {
+            this.compile(onCompiled);
+        }
+        
+        run();
+    }
+}
+```
+
+终于找到，compiler.compile 调用的时候传入了 onCompiled 作为回调，onCompiled  中调用 compiler.emitAssets 和 compiler.emitRecords 对资源做输出。
+
+
+
+到此，webpack 源码主体流程基本完成
 
 
 
