@@ -66,6 +66,7 @@ const path = require('path')
 
 module.exports = {
   entry: './src/index.js',
+  context: path.resolve(__dirname, "."), // 这个必须有，不然会有问题
   output: {
     filename: 'bundle.js',
     path: path.resolve(__dirname, 'dist')
@@ -184,7 +185,8 @@ compiler.run((err, stats) => {
 
 ```js
 const createCompiler = rawOptions => {
-    // 格式化、初始化传进来的参数
+    // 格式化、初始化传进来的参数（如 output、devserver、plugin 给赋值一些默认的配置格式，防止后面使用时报错）
+	// getNormalizedWebpackOptions + applyWebpackOptionsBaseDefaults 合并出最终的 webpack 配置
 	const options = getNormalizedWebpackOptions(rawOptions);
 	applyWebpackOptionsBaseDefaults(options);
     
@@ -233,7 +235,8 @@ const createCompiler = rawOptions => {
 
 createCompiler 函数主要的逻辑就是：
 
-1. 格式化、初始化传进来的参数
+1. 格式化、初始化传进来的参数格式化、初始化传进来的参数（如 output、devserver、plugin 给赋值一些默认的配置格式，防止后面使用时报错）
+   - getNormalizedWebpackOptions + applyWebpackOptionsBaseDefaults 合并出最终的 webpack 配置
 2. 通过 new Compiler 得到一个 compiler 对象
 3. 将 options（经过格式化后的 webpack.config.js ）挂载到 compiler 上
 4. NodeEnvironmentPlugin 把文件系统挂载到 compiler 对象上
@@ -654,7 +657,7 @@ class Compiler {
             // 通过 this.newCompilation 返回一个 compilation 对象
 			const compilation = this.newCompilation(params);
             
-            // 钩子 make，// 钩子 make，这个钩子里面就是真正使用 compilation 执行编译的
+            // 钩子 make，这个钩子里面就是真正使用 compilation 执行编译的
             this.hooks.make.callAsync(compilation, err => {
                 // 钩子 finishMake
                 this.hooks.finishMake.callAsync(compilation, err => {
@@ -1535,19 +1538,29 @@ class Compiler {
 
 
 
+## 总结
+
+
+
+
+
 ## 附录
 
-可以参考的一些优秀文章：
+参考的一些优秀文章：
 
-https://juejin.cn/post/6948950633814687758
+[[万字总结] 一文吃透 Webpack 核心原理](https://juejin.cn/post/6949040393165996040)
 
-https://segmentfault.com/a/1190000023016373
+[webpack编译流程详解](https://juejin.cn/post/6948950633814687758)
 
-https://juejin.cn/post/6844903693070909447
+[webpack执行过程](https://www.cnblogs.com/pluslius/p/10271537.html)
 
-https://www.cnblogs.com/pluslius/p/10271537.html
+[webpack构建流程分析](https://juejin.cn/post/6844904000169607175)
 
-https://juejin.cn/post/6844904000169607175
+[【webpack进阶】你真的掌握了loader么？- loader十问](https://juejin.cn/post/6844903693070909447)
+
+[webpack核心模块tapable用法解析](https://juejin.cn/post/6939794845053485093)
+
+[Webpack 基石 tapable 揭秘](https://juejin.cn/post/6937829048332746788)
 
 
 

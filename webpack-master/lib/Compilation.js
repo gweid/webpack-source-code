@@ -1815,7 +1815,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 				? optionsOrName
 				: { name: optionsOrName };
 
-        // 添加入口文件
+    // 添加入口文件
 		this._addEntryItem(context, entry, "dependencies", options, callback);
 	}
 
@@ -1886,7 +1886,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 		// 调用 addEntry 钩子
 		this.hooks.addEntry.call(entry, options);
 		
-		// 调用 this.addModuleTree 将当前的模块加入到 module tree(模块树)
+		// 调用 this.addModuleTree 将当前的模块加入到 module tree(模块树)	
 		this.addModuleTree(
 			{
 				context,

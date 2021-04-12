@@ -1095,7 +1095,7 @@ ${other}`);
 						logger.time("finish compilation");
 
 						// 执行compilation的finsh方法 对modules上的错误或者警告处理
-                        // finsh中会执行compilation.hooks.finishModules钩子
+            // finsh中会执行compilation.hooks.finishModules钩子
 						compilation.finish(err => {
 							logger.timeEnd("finish compilation");
 							if (err) return callback(err);

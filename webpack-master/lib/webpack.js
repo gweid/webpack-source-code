@@ -58,6 +58,7 @@ const createMultiCompiler = (childOptions, options) => {
 // 创建 compiler
 const createCompiler = rawOptions => {
 	// 格式化、初始化传进来的参数（如 output、devserver、plugin 给赋值一些默认的配置格式，防止后面使用时报错）
+	// getNormalizedWebpackOptions + applyWebpackOptionsBaseDefaults 合并出最终的 webpack 配置
 	const options = getNormalizedWebpackOptions(rawOptions);
 	applyWebpackOptionsBaseDefaults(options);
 
