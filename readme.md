@@ -4,6 +4,10 @@
 
 
 
+![](/imgs/img7.jpg)
+
+
+
 ## 准备工作
 
 首先，下载 webpack 的源码：
@@ -957,14 +961,17 @@ class Compilation {
 5. compilation.factorizeModule：
    - 执行 factorizeQueue 的 add 方法将模块添加到 factorizeQueue 队列
      - compilation.factorizeQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__factorizeModule=>factory.create()
+     - 最终就是使用 factory.create() 去创建 module
    - 执行回调，回调中执行 compilation.addModule
 6. compilation.addModule：
    - 执行 addModuleQueue.add 将模块添加到 addModuleQueue 队列
      - compilation.addModuleQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__addModule
+     - 最终就是调用__addModule 方法将 module 添加到 compilation.modules 中
    - 执行回调，回调中继续调用 compilation.buildModule
 7. compilation.buildModule：
    - 执行 addModuleQueue.add 将模块添加到 addModuleQueue 队列
      - compilation.buildQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__buildModule
+     - 最终就是通过 __buildModule 去编译模块
 
 其实 compilation 对模块进行处理，简单来说就是：
 
