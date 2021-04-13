@@ -91,6 +91,16 @@ module.exports = {
 
 
 
+debug 调试：使用 vscode 内置的 debug 工具
+
+![](/imgs/img8.png)
+
+然后文件内写入：
+
+![](/imgs/img9.png)
+
+
+
 ## webpack 的 compiler
 
 webpack 有两个主要的核心对象，一个是 compiler，另外一个是 compilation
@@ -1424,7 +1434,7 @@ class Compiler {
 
 
 
-回到 compilation.seal：
+回到 compilation.seal：seal 函数主要完成从 `module` 到 `chunks` 的转化
 
 ```js
 class Compilation {
@@ -1463,10 +1473,15 @@ class Compilation {
         // 生成 chunkGraph 实例
 		const chunkGraph = new ChunkGraph(this.moduleGraph);
         
+        // 遍历 compilation.modules ，记录下模块与 chunk 关系
+        for (const module of this.modules) {
+			ChunkGraph.setChunkGraphForModule(module, chunkGraph);
+		}
+        
         // 触发 seal 钩子
 		this.hooks.seal.call();
         
-        // 循环 this.entries 入口文件创建 chunks
+        // 循环 this.entries 创建 chunks
         for (const [name, { dependencies, includeDependencies, options }] of this.entries) {
             // ...
         }
@@ -1531,12 +1546,26 @@ class Compilation {
 
 总结一下 compilation.seal 的主要流程：
 
-1. 循环 this.entries 入口文件创建 chunks
-2. 执行各种优化 module、chunk、module tree
-3. 调用 compilation.codeGeneration 方法用于生成编译好的代码
-4. 执行代码生成的方法 compilation.\_runCodeGenerationJobs
+1. 创建 chunkGraph 实例
+2. 遍历 compilation.modules ，记录下模块与 chunk 关系
+
+2. 循环 this.entries 入口文件创建 chunks
+
+3. 执行各种优化 module、chunk、module tree
+
+4. 调用 compilation.codeGeneration 方法用于生成编译好的代码
+
+5. 执行代码生成的方法 compilation.\_runCodeGenerationJobs
    - \_runCodeGenerationJobs 中会执行 compilation._codeGenerationModule，这个方法会根据 tempalte 生成代码
-5. 执行 compilation.createChunkAssets 创建 chunkAssets 资源，createChunkAssets 里面会调用 compilation.emitAsset 将生成的代码放到 compilation.assets 中，然后一路回调，最后的回调就是用的createChunkAssets(callback) 中的 callback，然后一路找回调，会发现最后调用的回调是 compilation.seal(callback)这里的，而 compilation.seal 在 compiler.compile 中被调用，此时，又回到了 compiler
+
+6. 执行 compilation.createChunkAssets 创建 chunkAssets 资源，createChunkAssets 里面会调用 compilation.emitAsset 将生成的代码放到 compilation.assets 中，然后一路回调，最后的回调就是用的createChunkAssets(callback) 中的 callback，然后一路找回调，会发现最后调用的回调是 compilation.seal(callback)这里的，而 compilation.seal 在 compiler.compile 中被调用，此时，又回到了 compiler
+
+这一步的关键逻辑是将 `module` 按规则组织成 `chunks` ，webpack 内置的 `chunk` 封装规则：
+
+- entry 及 entry 触达到的模块，组合成一个 chunk
+- 使用动态引入语句引入的模块，各自组合成一个 chunk（ 例如：import('./xxx/xx.js').then(res => {}) ）
+
+
 
 ```js
 class Compiler {
@@ -1559,6 +1588,7 @@ class Compiler {
         / 定义了一个 onCompiled 函数，主要是传给 this.compile 作为执行的回调函数
         const onCompiled = (err, compilation) => {
             process.nextTick(() => {
+                // ...
                 this.emitAssets(compilation, err => {
                     this.emitRecords(err => {})
                 })
