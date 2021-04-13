@@ -961,12 +961,16 @@ class Compilation {
 5. compilation.factorizeModule：
    - 执行 factorizeQueue 的 add 方法将模块添加到 factorizeQueue 队列
      - compilation.factorizeQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__factorizeModule=>factory.create()
-     - 最终就是使用 factory.create() 去创建 module
+     - 最终就是使用 factory.create() 去创建 module，factory.create调用的是 normalModuleFacotry 的 create 方法，normalModuleFacotry .create 中做了：
+       - 触发 beforeResolve 事件
+       - 触发 NormalModuleFactory 中的 factory 钩子。（在 NormalModuleFactory 的 constructor 中有一段注册 factory 事件的逻辑）执行 factory 逻辑，factory 做了两件事：
+         - 获取文件的绝对路径、根据文件类型找到对应的loaders、loaders 的绝对路径
+         - 生成 normalModule 实例，并将文件路径和 loaders 路径存放到实例 conpilation 中
    - 执行回调，回调中执行 compilation.addModule
 6. compilation.addModule：
    - 执行 addModuleQueue.add 将模块添加到 addModuleQueue 队列
      - compilation.addModuleQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__addModule
-     - 最终就是调用__addModule 方法将 module 添加到 compilation.modules 中
+     - 最终就是调用__addModule 方法将 module 添加到 compilation.modules 中，以便于在最后打包成 chunk 的时候使用
    - 执行回调，回调中继续调用 compilation.buildModule
 7. compilation.buildModule：
    - 执行 addModuleQueue.add 将模块添加到 addModuleQueue 队列
@@ -990,6 +994,15 @@ class Compilation {
 
 
 ## 进行模块编译构建(build)
+
+总的来说，build 阶段主要做的以下几件事：
+
+- 使用 loader-runner 运行 Loader
+- Parser 解析出 AST
+- walkStatements 解析出依赖
+- 如果当前模块有依赖，那么继续递归进行 build 流程
+
+
 
 ### 1、从 compilation.buildModule 开始
 
@@ -1164,7 +1177,7 @@ class NormalModule extends Module {
 
 doBuild 中定义了 processResult，用来处理 runLoaders 执行后的结果
 
-runLoaders： runLoaders 来自 webpack 官方维护的 loader-runner 库，主要用来执行 loader 对匹配到的模块进行转换，最后在回调中将转换后的结果交给 processResult 去处理
+runLoaders： runLoaders 来自 webpack 官方维护的 loader-runner 库，主要用来执行 loader 对匹配到的模块进行转换（通常是从各类资源类型转译为 JavaScript 文本，例如图片、css、vue文件等），使其转换成 js 标准模块，最后在回调中将转换后的结果交给 processResult 去处理
 
 ```js
 class NormalModule extends Module {
@@ -1233,6 +1246,15 @@ class JavascriptParser extends Parser {
             onComment: comments,
             onInsertedSemicolon: pos => semicolons.add(pos)
         });
+        
+        if (this.hooks.program.call(ast, comments) === undefined) {
+			this.detectMode(ast.body);
+			this.preWalkStatements(ast.body);
+			this.prevStatement = undefined;
+			this.blockPreWalkStatements(ast.body);
+			this.prevStatement = undefined;
+			this.walkStatements(ast.body);
+		}
     }
     
     static _parse(code, options) {
@@ -1248,7 +1270,22 @@ class JavascriptParser extends Parser {
 
 > 因为需要分析模块代码，看看当前模块还需要依赖于哪些模块，对依赖的模块继续进行编译，这是一步递归的过程。
 
-到此，buildModule=>_buildModule=>module.build 的工作基本完成。
+
+
+调用 acorn 将 JS 文本解析为 AST
+
+遍历 AST，触发各种钩子
+
+1. blockPreWalkStatements 中进一步解析当前模块的依赖
+2. 调用 `module` 对象的 `addDependency` 将依赖对象加入到 `module` 依赖列表中
+
+AST 遍历完毕后，调用 `module.handleParseResult` 处理模块依赖
+
+对于 `module` 新增的依赖，调用 `handleModuleCreate` ，递归解析依赖
+
+所有依赖都解析完毕后，构建阶段结束
+
+这个过程中数据流 `module => ast => dependences => module` ，先转 AST 再从 AST 找依赖
 
 
 
