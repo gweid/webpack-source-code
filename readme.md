@@ -116,6 +116,8 @@ webpack 函数接收两个参数：
 
 从上面的 build.js 中可以知道，webpack 函数来自于 webpack/lib/webpack.js，进入到文件里面，可以看到：
 
+> webpack-master\lib\webpack.js
+
 ```js
 const webpack = (options, callback) => {
     const create = () => {
@@ -195,7 +197,9 @@ compiler.run((err, stats) => {
 
 ### 2、创建 compiler
 
-由上面的 webpack() 可以看出，compiler 由 createCompiler 这个函数返回，看看 createCompiler 这个函数（webpack/lib/webpack.js）：
+由上面的 webpack() 可以看出，compiler 由 createCompiler 这个函数返回，看看 createCompiler 这个函数
+
+> webpack-master\lib\Compiler.js
 
 ```js
 const createCompiler = rawOptions => {
@@ -264,7 +268,9 @@ createCompiler 函数主要的逻辑就是：
 
 
 
-看看 WebpackOptionsApply().process （webpack/lib/WebpackOptionsApply.js）这个函数，这个函数非常重要，会将配置的一些属性转换成插件注入到 webpack 中，例如：入口 entry 就被转换成了插件注入到 webpack 中 
+看看 WebpackOptionsApply().process 这个函数，这个函数非常重要，会将配置的一些属性转换成插件注入到 webpack 中，例如：入口 entry 就被转换成了插件注入到 webpack 中 
+
+> webpack-master\lib\WebpackOptionsApply.js
 
 ```js
 class WebpackOptionsApply extends OptionsApply {
@@ -309,7 +315,9 @@ class WebpackOptionsApply extends OptionsApply {
 
 
 
-可以看出，compiler 是通过 new Compiler 这个类得到的，而 new 一个类最主要的就是初始化这个类的 constructor，现在来看看 Compiler 这个类（webpack/lib/Compiler.js）：
+可以看出，compiler 是通过 new Compiler 这个类得到的，而 new 一个类最主要的就是初始化这个类的 constructor，现在来看看 Compiler 这个类：
+
+> webpack-master\lib\Compiler.js
 
 ```js
 class Compiler {
@@ -378,6 +386,8 @@ compiler.run((err, stats) => {
 
 webpack() 函数：
 
+> webpack-master\lib\webpack.js
+
 ```js
 const webpack = (options, callback) => {
     if (callback) {
@@ -393,6 +403,8 @@ const webpack = (options, callback) => {
 ```
 
 可以看到，执行 webpack() 函数的重要一步就是调用 compiler.run，现在回到 Compiler 这个类身上,看看 run 方法：
+
+> webpack-master\lib\Compiler.js
 
 ```js
 class Compiler {
@@ -454,6 +466,8 @@ class Compiler {
 ### 4、compiler.compile ()
 
 现在看看 compiler.run 里面调用的 compile 函数
+
+> webpack-master\lib\Compiler.js
 
 ```js
 class Compiler {
@@ -595,7 +609,9 @@ run.callAsync(compiler)
 
 ### 1、compilation 的创建
 
-回头看看 compiler.compile()【webpack/lib/Compiler.js】 这个函数：
+回头看看 compiler.compile() 这个函数：
+
+> webpack-master\lib\Compiler.js
 
 ```js
 class Compiler {
@@ -617,6 +633,8 @@ class Compiler {
 
 可以看出来，compilation 由 this.newCompilation() 返回，来看看这个函数：
 
+> webpack-master\lib\Compiler.js
+
 ```js
 class Compiler {
     // ...
@@ -634,6 +652,8 @@ class Compiler {
 ```
 
 可以看出，compilation 又由 this.createCompilation() 返回
+
+> webpack-master\lib\Compiler.js
 
 ```js
 class Compiler {
@@ -654,6 +674,8 @@ class Compiler {
 ### 2、compilation 的调用时机
 
 回看上面 compiler.compile() 的代码：
+
+> webpack-master\lib\Compiler.js
 
 ```js
 class Compiler {
@@ -690,7 +712,9 @@ class Compiler {
 
 那么这个钩子是什么时候被注册的呢？
 
-1、webpack/lib/webpack.js 中的 createCompiler：
+1、createCompiler：
+
+> webpack-master\lib\Compiler.js
 
 ```js
 const createCompiler = rawOptions => {
@@ -700,7 +724,9 @@ const createCompiler = rawOptions => {
 }
 ```
 
-2、WebpackOptionsApply().process() 【webpack/lib/WebpackOptionsApply.js】
+2、WebpackOptionsApply().process() 
+
+> webpack-master\lib\WebpackOptionsApply.js
 
 ```js
 class WebpackOptionsApply extends OptionsApply {
@@ -713,7 +739,9 @@ class WebpackOptionsApply extends OptionsApply {
 }
 ```
 
-3、再看 EntryOptionPlugin().apply(compiler)【webpack/lib/EntryOptionPlugin.js】
+3、再看 EntryOptionPlugin().apply(compiler)
+
+> webpack-master\lib\EntryOptionPlugin.js
 
 ```js
 class EntryOptionPlugin {
@@ -748,7 +776,9 @@ class EntryOptionPlugin {
 
 可以看到，EntryOptionPlugin.apply() 主要做的事：就是调用了自身的 applyEntryOption 方法，里面对入口 entry 分情况处理，这里主要看 new EntryPlugin(context, entry, options).apply(compiler) 这个
 
-4、然后来到 EntryPlugin.apply()【webpack\lib\EntryPlugin.js】
+4、然后来到 EntryPlugin.apply()
+
+> webpack-master\lib\EntryPlugin.js
 
 ```js
 class EntryPlugin {
@@ -775,6 +805,8 @@ class EntryPlugin {
 
 由上面可知，compilation 是在 make 这个钩子里面执行的，而注册这个钩子的地方，绕了一圈，定位到了 lib\EntryPlugin.js 中 EntryPlugin 这个类的 apply 中 compiler.hooks.make.tapAsync 进行回调注册。现在接着从这个注册回调中分析：
 
+> webpack-master\lib\EntryPlugin.js
+
 ```js
 class EntryPlugin {
     apply(compiler) {
@@ -796,6 +828,8 @@ class EntryPlugin {
 ```
 
 可以看到，这个注册回调函数里面调用了 compilation.addEntry()，这个 Compilation 类里面的 addEntry 主要的作用就是添加入口模块
+
+> webpack-master\lib\Compilation.js
 
 ```js
 class Compilation {
@@ -1018,6 +1052,8 @@ class Compilation {
 
 模块的构建从 compilation.buildModule 开始
 
+> webpack-master\lib\Compilation.js
+
 ```js
 class Compilation {
     conscructor() {
@@ -1112,6 +1148,8 @@ class Module extends DependenciesBlock  {
 
 打开 webpack\lib\NormalModule.js 文件，可以看到：
 
+> webpack-master\lib\NormalModule.js
+
 ```js
 class NormalModule extends Module {
     // ...
@@ -1132,6 +1170,8 @@ NormalModule 类继承于 Module 类，并重写了 build
 
 module.build 也就是 NormalModule 类的 build 方法：
 
+> webpack-master\lib\NormalModule.js
+
 ```js
 class NormalModule extends Module {
     // ...
@@ -1146,6 +1186,8 @@ class NormalModule extends Module {
 ```
 
 NormalModule 类的 build 方法中将 doBuild 函数的结果返回。来到 doBuild 方法：
+
+> webpack-master\lib\NormalModule.js
 
 ```js
 const { runLoaders } = require("loader-runner");
@@ -1189,6 +1231,8 @@ doBuild 中定义了 processResult，用来处理 runLoaders 执行后的结果
 
 runLoaders： runLoaders 来自 webpack 官方维护的 loader-runner 库，主要用来执行 loader 对匹配到的模块进行转换（通常是从各类资源类型转译为 JavaScript 文本，例如图片、css、vue文件等），使其转换成 js 标准模块，最后在回调中将转换后的结果交给 processResult 去处理
 
+> webpack-master\lib\NormalModule.js
+
 ```js
 class NormalModule extends Module {
     // ...
@@ -1214,6 +1258,8 @@ class NormalModule extends Module {
 
 processResult 做的事就是拿到 loader 转换之后的结果 `const source = result[0]`,最后调用 callback，这个 callback 是 doBuild 上的 callback
 
+> webpack-master\lib\NormalModule.js
+
 ```js
 class NormalModule extends Module {
     // ...
@@ -1238,9 +1284,9 @@ class NormalModule extends Module {
 
 可以看到执行 doBuild 的 callback 中有一步是 this.parser.parse，这一步就是进行 AST 转换
 
-这个 this.parser.parse 方法主要就是：webpack\lib\javascript\JavascriptParser.js
+这个 this.parser.parse 方法主要就是： JavascriptParser 类的 parse 方法
 
- 中的 JavascriptParser 类的 parse 方法
+> webpack-master\lib\javascript\JavascriptParser.js
 
 ```js
 const { Parser: AcornParser } = require("acorn");
@@ -1300,6 +1346,8 @@ AST 遍历完毕后，调用 `module.handleParseResult` 处理模块依赖
 
 
 接下来就回到了 compilation.processModuleDependencies 对 module 递归进行依赖收集
+
+> webpack-master\lib\Compilation.js
 
 ```js
 class Compilation {
@@ -1376,6 +1424,8 @@ class Compilation {
 
 ## 对处理完成的模块 module 封装输出
 
+> webpack-master\lib\Compiler.js
+
 ```js
 class Compiler {
     // ...
@@ -1435,6 +1485,8 @@ class Compiler {
 
 
 回到 compilation.seal：seal 函数主要完成从 `module` 到 `chunks` 的转化
+
+> webpack-master\lib\Compilation.js
 
 ```js
 class Compilation {
