@@ -23,7 +23,7 @@ https://github.com/webpack/webpack
 ```css
 webpack-source-code
 ├── webpack-master // webpack 源码
-├── myProgram
+├── myProgram // t
 │   ├── src
 │   │   ├── utils
 │   │   ├── └── math.js
@@ -107,14 +107,14 @@ webpack 有两个主要的核心对象，一个是 compiler，另外一个是 co
 
 
 
-### 1、从 webpack(config, callback) 开始
+### 1、从 webpack(config, callback) 函数开始
 
 webpack 函数接收两个参数：
 
 - config：就是 webpack.config.js 中的配置
 - callback：回调函数，可传可不传
 
-从上面的 build.js 中可以知道，webpack 函数来自于 webpack/lib/webpack.js，进入到文件里面，可以看到：
+webpack 函数来自于 webpack/lib/webpack.js，进入到文件里面，可以看到：
 
 > webpack-master\lib\webpack.js
 
@@ -202,27 +202,26 @@ compiler.run((err, stats) => {
 > webpack-master\lib\Compiler.js
 
 ```js
+// 创建 compiler
 const createCompiler = rawOptions => {
-    // 格式化、初始化传进来的参数（如 output、devserver、plugin 给赋值一些默认的配置格式，防止后面使用时报错）
+	// 格式化、初始化传进来的参数（如 output、devserver、plugin 给赋值一些默认的配置格式，防止后面使用时报错）
 	// getNormalizedWebpackOptions + applyWebpackOptionsBaseDefaults 合并出最终的 webpack 配置
 	const options = getNormalizedWebpackOptions(rawOptions);
 	applyWebpackOptionsBaseDefaults(options);
-    
-    // 通过 new Compiler 得到一个 compiler 对象
+
+	// 通过 new Compiler 得到一个 compiler 对象
 	const compiler = new Compiler(options.context);
 	// 将 options（经过格式化后的 webpack.config.js ）挂载到 compiler 上
 	compiler.options = options;
-    
-    // 把 NodeEnvironmentPlugin 插件挂载到compiler实例上
-	// NodeEnvironmentPlugin 插件主要是文件系统挂载到 compiler 对象上
-	// 如infrastructureLogger(log插件)、inputFileSystem(文件输入插件)、outputFileSystem(文件输出插件)、watchFileSystem(监听文件输入插件)
+
+	// 把 NodeEnvironmentPlugin 插件挂载到compiler实例上
+	// NodeEnvironmentPlugin 插件主要是文件系统挂载到compiler对象上
+	// 如 infrastructureLogger(log插件)、inputFileSystem(文件输入插件)、outputFileSystem(文件输出插件)、watchFileSystem(监听文件输入插件)
 	new NodeEnvironmentPlugin({
 		infrastructureLogging: options.infrastructureLogging
 	}).apply(compiler);
-    
-    // ...
-    
-    // 注册所有的插件
+
+	// 注册所有的插件
 	if (Array.isArray(options.plugins)) {
 		for (const plugin of options.plugins) {
 			if (typeof plugin === "function") {
@@ -235,20 +234,21 @@ const createCompiler = rawOptions => {
 			}
 		}
 	}
-    
-    // 调用 compiler 身上的两个钩子 environment、afterEnvironment
+	applyWebpackOptionsDefaults(options);
+
+	// 调用 compiler 身上的两个钩子 environment、afterEnvironment
 	compiler.hooks.environment.call();
 	compiler.hooks.afterEnvironment.call();
-    
-    // WebpackOptionsApply().process 主要用来处理 config 文件中除了 plugins 的其他属性
-	// 这个函数非常重要，会将配置的一些属性转换成插件注入到 webpack 中 
+
+	// WebpackOptionsApply().process 主要用来处理 config 文件中除了 plugins 的其他属性
+	// 这个东西非常重要，会将配置的一些属性转换成插件注入到 webpack 中 
 	// 例如：入口 entry 就被转换成了插件注入到 webpack 中 
 	new WebpackOptionsApply().process(options, compiler);
 	// 调用 initialize 钩子
 	compiler.hooks.initialize.call();
 	// 返回 compiler
 	return compiler;
-}
+};
 ```
 
 createCompiler 函数主要的逻辑就是：
@@ -285,29 +285,29 @@ class WebpackOptionsApply extends OptionsApply {
 	 */
     process(options, compiler) {
         // 根据各种配置情况，决定是否使用一些 plugin
-		if (options.externals) {
-			//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
-			const ExternalsPlugin = require("./ExternalsPlugin");
-			new ExternalsPlugin(options.externalsType, options.externals).apply(
-				compiler
-			);
-		}
-        if (options.externalsPresets.node) {
-			const NodeTargetPlugin = require("./node/NodeTargetPlugin");
-			new NodeTargetPlugin().apply(compiler);
-		}
-		if (options.externalsPresets.electronMain) {
-			//@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
-			const ElectronTargetPlugin = require("./electron/ElectronTargetPlugin");
-			new ElectronTargetPlugin("main").apply(compiler);
-		}
-        
-        //... 这里是一堆根据 webpack.config.js 的配置转换成 plugin 的操作
-        
-        // 处理入口，将 entry: '', 转换成 EntryOptionPlugin 插件进行注入
-		new EntryOptionPlugin().apply(compiler);
-		compiler.hooks.entryOption.call(options.context, options.entry);
-        
+        if (options.externals) {
+          //@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+          const ExternalsPlugin = require("./ExternalsPlugin");
+          new ExternalsPlugin(options.externalsType, options.externals).apply(
+            compiler
+          );
+        }
+            if (options.externalsPresets.node) {
+          const NodeTargetPlugin = require("./node/NodeTargetPlugin");
+          new NodeTargetPlugin().apply(compiler);
+        }
+        if (options.externalsPresets.electronMain) {
+          //@ts-expect-error https://github.com/microsoft/TypeScript/issues/41697
+          const ElectronTargetPlugin = require("./electron/ElectronTargetPlugin");
+          new ElectronTargetPlugin("main").apply(compiler);
+        }
+
+            //... 这里是一堆根据 webpack.config.js 的配置转换成 plugin 的操作
+
+            // 处理入口，将 entry: '', 转换成 EntryOptionPlugin 插件进行注入
+        new EntryOptionPlugin().apply(compiler);
+        compiler.hooks.entryOption.call(options.context, options.entry);
+
         //....
     }
 }
@@ -315,7 +315,7 @@ class WebpackOptionsApply extends OptionsApply {
 
 
 
-可以看出，compiler 是通过 new Compiler 这个类得到的，而 new 一个类最主要的就是初始化这个类的 constructor，现在来看看 Compiler 这个类：
+compiler 是通过 new Compiler 这个类得到的，而 new 一个类最主要的就是初始化这个类的 constructor，现在来看看 Compiler 这个类：
 
 > webpack-master\lib\Compiler.js
 
@@ -323,8 +323,8 @@ class WebpackOptionsApply extends OptionsApply {
 class Compiler {
     constructor(context) {
         // 初始化了一系列的钩子
-		// 使用的是 tapable
-		// tapable，简单来说，就是一个基于事件的流程管理工具，主要基于发布订阅模式实现
+        // 使用的是 tapable
+        // tapable，简单来说，就是一个基于事件的流程管理工具，主要基于发布订阅模式实现
         this.hooks = Object.freeze({
             initialize: new SyncHook([]),
             
@@ -339,10 +339,10 @@ class Compiler {
         this.webpack = webpack;
         
         this.name = undefined;
-		this.parentCompilation = undefined;
-		this.root = this;
-		this.outputPath = "";
-		this.watching = undefined;
+        this.parentCompilation = undefined;
+        this.root = this;
+        this.outputPath = "";
+        this.watching = undefined;
         
         // ...
     }
@@ -409,13 +409,13 @@ const webpack = (options, callback) => {
 ```js
 class Compiler {
     // ...
-    
+
     run(callback) {
-        // ...
+    // ...
         
-        // 处理错误的函数
+    // 处理错误的函数
 		const finalCallback = (err, stats) => {
-            // ...
+      // ...
             
 			if (err) {
 				this.hooks.failed.call(err);
@@ -423,10 +423,10 @@ class Compiler {
 			this.hooks.afterDone.call(stats);
 		};
         
-        // 定义了一个 onCompiled 函数，主要是传给 this.compile 作为执行的回调函数
-        const onCompiled = (err, compilation) => {}
+    // 定义了一个 onCompiled 函数，主要是传给 this.compile 作为执行的回调函数
+    const onCompiled = (err, compilation) => {}
         
-        // run，主要是流程： beforeRun 钩子 --> beforeRun 钩子 --> this.compile
+    // run，主要是流程： beforeRun 钩子 --> beforeRun 钩子 --> this.compile
 		// 如果遇到 error，就执行 finalCallback
 		// 这里调用 beforeRun、run 主要就是提供 plugin 执行时机
 		const run = () => {
@@ -447,7 +447,7 @@ class Compiler {
 			});
 		};
         
-        run();
+    run();
     }
 }
 ```
@@ -477,12 +477,12 @@ class Compiler {
         // 初始化 compilation 的参数
 		const params = this.newCompilationParams();
         
-        // 钩子 beforeCompile
-        this.hooks.beforeCompile.callAsync(params, err => {
-            // 钩子 compile
+      // 钩子 beforeCompile
+      this.hooks.beforeCompile.callAsync(params, err => {
+      // 钩子 compile
 			this.hooks.compile.call(params);
             
-            // 通过 this.newCompilation 返回一个 compilation 对象
+      // 通过 this.newCompilation 返回一个 compilation 对象
 			const compilation = this.newCompilation(params);
             
             // 钩子 make, 使用 compilation 对模块执行编译的
@@ -616,17 +616,17 @@ run.callAsync(compiler)
 ```js
 class Compiler {
     // ...
-    
+
     compile(callback) {
         // 初始化 compilation 的参数
-		const params = this.newCompilationParams();
-        
+		    const params = this.newCompilationParams();
+
         this.hooks.beforeCompile.callAsync(params, err => {
-            this.hooks.compile.call(params);
-            
-            // 通过 this.newCompilation 返回一个 compilation 对象
-			const compilation = this.newCompilation(params);
-        })
+        this.hooks.compile.call(params);
+
+        // 通过 this.newCompilation 返回一个 compilation 对象
+	      const compilation = this.newCompilation(params);
+      })
     }
 }
 ```
@@ -641,13 +641,13 @@ class Compiler {
     
     newCompilation(params) {
         // 调用 this.createCompilation() 返回 compilation
-		const compilation = this.createCompilation();
-		compilation.name = this.name;
-		compilation.records = this.records;
-		this.hooks.thisCompilation.call(compilation, params);
-		this.hooks.compilation.call(compilation, params);
-		return compilation;
-	}
+      const compilation = this.createCompilation();
+      compilation.name = this.name;
+      compilation.records = this.records;
+      this.hooks.thisCompilation.call(compilation, params);
+      this.hooks.compilation.call(compilation, params);
+      return compilation;
+	  }
 }
 ```
 
@@ -660,10 +660,10 @@ class Compiler {
     // ...
     
     createCompilation() {
-		this._cleanupLastCompilation();
-        // new Compilation 创建 compilation
-		return (this._lastCompilation = new Compilation(this));
-	}
+      this._cleanupLastCompilation();
+      // new Compilation 创建 compilation
+      return (this._lastCompilation = new Compilation(this));
+    }
 }
 ```
 
@@ -679,32 +679,29 @@ class Compiler {
 
 ```js
 class Compiler {
-    // ...
-    
-    compile(callback) {
-        // 初始化 compilation 的参数
+    //...
+
+  	compile(callback) {
+		// 初始化 compilation 的参数
 		const params = this.newCompilationParams();
-        
-        // 钩子 beforeCompile
-        this.hooks.beforeCompile.callAsync(params, err => {
-            // 钩子 compile
+		
+		// 钩子 beforeCompile
+		this.hooks.beforeCompile.callAsync(params, err => {
+			if (err) return callback(err);
+			
+			// 钩子 compile
 			this.hooks.compile.call(params);
-            
-            // 通过 this.newCompilation 返回一个 compilation 对象
+			
+			// 通过 this.newCompilation 返回一个 compilation 对象
 			const compilation = this.newCompilation(params);
-            
-            // 钩子 make，这个钩子里面就是真正使用 compilation 执行编译的
-            this.hooks.make.callAsync(compilation, err => {
-                // 钩子 finishMake
-                this.hooks.finishMake.callAsync(compilation, err => {
-                    // 钩子 afterCompile
-                    this.hooks.afterCompile.callAsync(compilation, err => {
-                        
-                    })
-                })
-            })
-        }
-    }
+
+
+			// 钩子 make，这个钩子里面就是真正使用 compilation 执行编译的
+			this.hooks.make.callAsync(compilation, err => {
+
+			});
+		});
+	}
 }
 ```
 
@@ -783,9 +780,9 @@ class EntryOptionPlugin {
 ```js
 class EntryPlugin {
     apply(compiler) {
-        // ...
+      // ...
 
-		compiler.hooks.make.tapAsync("EntryPlugin", (compilation, callback) => {
+			compiler.hooks.make.tapAsync("EntryPlugin", (compilation, callback) => {
 		});
 	}
 }
@@ -835,45 +832,45 @@ class EntryPlugin {
 class Compilation {
     // 1 初始化 constructor
     conscructor() {
-        this.addModuleQueue = new AsyncQueue({
-			name: "addModule",
-			parent: this.processDependenciesQueue,
-			getKey: module => module.identifier(),
-			// processor：处理方法，调用 this._addModule
-			processor: this._addModule.bind(this)
-		});
-		this.factorizeQueue = new AsyncQueue({
-			name: "factorize",
-			parent: this.addModuleQueue,
-			// processor：处理方法，调用 this._factorizeModule
-			processor: this._factorizeModule.bind(this)
-		});
-		this.buildQueue = new AsyncQueue({
-			name: "build",
-			parent: this.factorizeQueue,
-			// processor：处理方法，调用 this._buildModule
-			processor: this._buildModule.bind(this)
-		});
+      this.addModuleQueue = new AsyncQueue({
+        name: "addModule",
+        parent: this.processDependenciesQueue,
+        getKey: module => module.identifier(),
+        // processor：处理方法，调用 this._addModule
+        processor: this._addModule.bind(this)
+		  });
+      this.factorizeQueue = new AsyncQueue({
+        name: "factorize",
+        parent: this.addModuleQueue,
+        // processor：处理方法，调用 this._factorizeModule
+        processor: this._factorizeModule.bind(this)
+      });
+      this.buildQueue = new AsyncQueue({
+        name: "build",
+        parent: this.factorizeQueue,
+        // processor：处理方法，调用 this._buildModule
+        processor: this._buildModule.bind(this)
+      });
     }
     
     // 2 这个函数的主要作用就是通过 _addEntryItem 添加入口，因为编译需要从入口开始
-	addEntry(context, entry, optionsOrName, callback) {
-        // ...
+    addEntry(context, entry, optionsOrName, callback) {
+      // ...
 
-        // 添加入口
-		this._addEntryItem(context, entry, "dependencies", options, callback);
-	}
+      // 添加入口
+      this._addEntryItem(context, entry, "dependencies", options, callback);
+    }
     
     // 3
     _addEntryItem(context, entry, target, options, callback) {
-        // ...
-        
-        // 调用 addEntry 钩子
+    // ...
+
+    // 调用 addEntry 钩子
 		this.hooks.addEntry.call(entry, options);
-        // // 调用 this.addModuleTree 将当前的模块加入到 module tree(模块树)
+        // 调用 this.addModuleTree 将当前的模块加入到 module tree(模块树)
         this.addModuleTree({}, (err, module) => {})
     }
-    
+
     // 4
     addModuleTree({ context, dependency, contextInfo }, callback) {
         // ...
@@ -881,7 +878,7 @@ class Compilation {
         // 调用 handleModuleCreation 处理模块并
         this.handleModuleCreation({}, err => {})
     }
-    
+
     // 5
     handleModuleCreation(
 		{factory, dependencies, originModule, contextInfo, context, recursive = true},
@@ -1008,7 +1005,7 @@ class Compilation {
      - 最终就是使用 factory.create() 去创建 module，factory.create调用的是 normalModuleFacotry 的 create 方法，normalModuleFacotry .create 中做了：
        - 触发 beforeResolve 事件
        - 触发 NormalModuleFactory 中的 factory 钩子。（在 NormalModuleFactory 的 constructor 中有一段注册 factory 事件的逻辑）执行 factory 逻辑，factory 做了两件事：
-         - 获取文件的绝对路径、根据文件类型找到对应的loaders、loaders 的绝对路径
+         - 获取文件的绝对路径、根据文件类型找到对应的 loaders、loaders 的绝对路径
          - 生成 normalModule 实例，并将文件路径和 loaders 路径存放到实例 conpilation 中
    - 执行回调，回调中执行 compilation.addModule
 6. compilation.addModule：
@@ -1131,9 +1128,9 @@ compilation.buildModule=>compilation.buildQueue.add()=>setImmediate(root._ensure
 
 ```js
 class Module extends DependenciesBlock  {
-    // ...
+  // ...
     
-    build(options, compilation, resolver, fs, callback) {
+  build(options, compilation, resolver, fs, callback) {
 		const AbstractMethodError = require("./AbstractMethodError");
 		throw new AbstractMethodError();
 	}
@@ -1144,7 +1141,7 @@ class Module extends DependenciesBlock  {
 
 可以通过光标在 Module 上，鼠标右键打开菜但，点击 find all Implementations 找到
 
-![](/imgs/img4.png)
+ ![](/imgs/img4.png)
 
 打开 webpack\lib\NormalModule.js 文件，可以看到：
 
@@ -1202,27 +1199,27 @@ class NormalModule extends Module {
         const processResult = (err, result) => {})
         
         // doBuild 的核心：执行所有的 loader 对匹配到的模块【test: /\.js$/】进行转换
-		// 转换后的结果交给 processResult 处理
-		// runLoaders 来自 webpack 官方维护的 loader-runner 库
-		runLoaders(
-			{
-				resource: this.resource, // 需要编译的模块路径
-				loaders: this.loaders, // 传入 loader
-				context: loaderContext,
-				// processResource：需要做的进一步操作
-				processResource: (loaderContext, resource, callback) => {
+        // 转换后的结果交给 processResult 处理
+        // runLoaders 来自 webpack 官方维护的 loader-runner 库
+        runLoaders(
+          {
+            resource: this.resource, // 需要编译的模块路径
+            loaders: this.loaders, // 传入 loader
+            context: loaderContext,
+            // processResource：需要做的进一步操作
+            processResource: (loaderContext, resource, callback) => {
+                        // ...
+
+                        loaderContext.addDependency(resource);
+                        // 读取模块文件
+                        fs.readFile(resource, callback);
+            }
+          },
+          (err, result) => {
                     // ...
-                    
-                    loaderContext.addDependency(resource);
-                    // 读取模块文件
-                    fs.readFile(resource, callback);
-				}
-			},
-			(err, result) => {
-                // ...
-				processResult(err, result.result);
-			}
-		);
+            processResult(err, result.result);
+          }
+        );
     }
 }
 ```
@@ -1533,10 +1530,10 @@ class Compilation {
         // 触发 seal 钩子
 		this.hooks.seal.call();
         
-        // 循环 this.entries 创建 chunks
-        for (const [name, { dependencies, includeDependencies, options }] of this.entries) {
-            // ...
-        }
+    // 循环 this.entries 创建 chunks
+    for (const [name, { dependencies, includeDependencies, options }] of this.entries) {
+      // ...
+    }
         
         // 用于创建 chunkGraph、moduleGraph
 		buildChunkGraph(this, chunkGraphInit);
@@ -1544,7 +1541,7 @@ class Compilation {
         // 触发钩子 optimize，代表优化开始
 		this.hooks.optimize.call();
         
-        // 执行各种优化 module
+    // 执行各种优化 module
 		while (this.hooks.optimizeModules.call(this.modules)) {
 			/* empty */
 		}
@@ -1666,7 +1663,14 @@ class Compiler {
 
 ## 总结
 
+在 Webpack 的主流程中,比较重要的几个节点：
 
+1. webpack()：执行 webpack 函数，
+2. createCompiler
+3. compiler.run()
+4. compiler.compile()
+5. compiler.hooks.make
+6. 
 
 
 

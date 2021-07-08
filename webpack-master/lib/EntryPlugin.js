@@ -34,6 +34,7 @@ class EntryPlugin {
 		compiler.hooks.compilation.tap(
 			"EntryPlugin",
 			(compilation, { normalModuleFactory }) => {
+        // 往 compilation.dependencyFactories 中添加 EntryDependency 与 normalModuleFactory
 				compilation.dependencyFactories.set(
 					EntryDependency,
 					normalModuleFactory
@@ -41,13 +42,14 @@ class EntryPlugin {
 			}
 		);
 
+    // 注册 compiler 的 make 钩子，用来开启编译
 		compiler.hooks.make.tapAsync("EntryPlugin", (compilation, callback) => {
 			const { entry, options, context } = this;
-			
+
 			// 创建依赖
 			const dep = EntryPlugin.createDependency(entry, options);
 
-			// 调用 compilation 的 addEntry 方法
+			// 调用 compilation 的 addEntry 方法，添加入口
 			compilation.addEntry(context, dep, options, err => {
 				callback(err);
 			});
