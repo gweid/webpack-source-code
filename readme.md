@@ -4,7 +4,7 @@
 
 
 
-![](/imgs/img7.png)
+![](/imgs/img7.jpg)
 
 
 
