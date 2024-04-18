@@ -729,7 +729,7 @@ class NormalModule extends Module {
 			return;
 		}
 
-		// doBuild 的核心：执行所有的 loader 对匹配到的模块【test: /\.js$/】进行转换
+		// doBuild 的核心：执行所有的 loader，对匹配到的模块资源转换成 js，例如【test: /\.js$/】
 		// 转换后的结果交给 processResult 处理
 		// runLoaders 来自 webpack 官方维护的 loader-runner 库
 		runLoaders(
@@ -783,6 +783,8 @@ class NormalModule extends Module {
 					this.buildInfo.buildDependencies.add(loader.loader);
 				}
 				this.buildInfo.cacheable = result.cacheable;
+
+        // 处理加载器返回的最终结果（设置模块的源码和抽象语法树 AST）
 				processResult(err, result.result);
 			}
 		);
@@ -884,6 +886,7 @@ class NormalModule extends Module {
 		const startTime = Date.now();
 
 		// 将 doBuild 的结果返回
+    // doBuild 中会执行 runLoaders，加载模块，进行模块转换，也就是 webpack 配置中的 loader
 		return this.doBuild(options, compilation, resolver, fs, err => {
 			// if we have an error mark module as failed and exit
 			if (err) {
@@ -991,6 +994,7 @@ class NormalModule extends Module {
 
 			let result;
 			try {
+        // 解析模块内容
 				result = this.parser.parse(this._ast || this._source.source(), {
 					current: this,
 					module: this,

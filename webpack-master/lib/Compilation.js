@@ -1257,6 +1257,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 				// 其实这里是使用了多态，module.build 是类 Moudle 上的方法，同时 Module 是一个父类
 				// 其他子类继承父类 Moudle，并对 build 方法进行重写
 				// 所以这里的 module.build 方法其实是 NormalModule 类继承了 Module 类并对重写的 build 方法
+        // build 的定义在： ./lib/NormalModule.js
 				module.build(
 					this.options,
 					this,
@@ -1273,6 +1274,8 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 						if (currentProfile !== undefined) {
 							currentProfile.markStoringStart();
 						}
+
+            // 将构建后的模块存储到缓存中
 						this._modulesCache.store(module.identifier(), null, module, err => {
 							if (currentProfile !== undefined) {
 								currentProfile.markStoringEnd();
@@ -1281,6 +1284,8 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 								this.hooks.failedModule.call(module, err);
 								return callback(new ModuleStoreError(module, err));
 							}
+
+              // 调用构建成功钩子，并返回成功
 							this.hooks.succeedModule.call(module);
 							return callback();
 						});
@@ -1612,6 +1617,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 						}
 
 						/**
+             * processModuleDependencies 主要作用就是递归处理模块依赖
 						 * compilation.buildModule 执行 buildQueue.add 将 module 添加到 buildQueue
 						 * buildQueue 通过 new AsyncQueue 创建
 						 * 
