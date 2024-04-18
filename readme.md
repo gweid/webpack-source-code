@@ -16,7 +16,7 @@ https://github.com/webpack/webpack
 
 接着，进入到 webpack 目录，通过 npm 装包
 
-然后，新建一个自己的项目，用来测试 webpack
+然后，新建一个自己的项目myProgram，用来调试 webpack
 
 所以，有基本目录结构：
 
@@ -98,6 +98,10 @@ debug 调试：使用 vscode 内置的 debug 工具
 然后文件内写入：
 
 ![](/imgs/img9.png)
+
+
+
+后续即可通过断点，进行 webpack 源码单点调试
 
 
 
