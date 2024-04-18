@@ -23,7 +23,7 @@ https://github.com/webpack/webpack
 ```css
 webpack-source-code
 ├── webpack-master // webpack 源码
-├── myProgram // t
+├── myProgram      // 调试 webpack 源码的项目
 │   ├── src
 │   │   ├── utils
 │   │   ├── └── math.js
