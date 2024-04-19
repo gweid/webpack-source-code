@@ -4,26 +4,28 @@
 
 
 
-![](/imgs/img7.jpg)
+![](./imgs/img7.jpg)
 
 
 
 ## 准备工作
 
-首先，下载 webpack 的源码：
+学会调试是阅读 webpack 源码的基础，下面来配置下调试环境
 
-https://github.com/webpack/webpack
 
-接着，进入到 webpack 目录，通过 npm 装包
 
-然后，新建一个自己的项目myProgram，用来调试 webpack
+1、首先，下载 webpack 的源码：https://github.com/webpack/webpack
 
-所以，有基本目录结构：
+2、接着，进入到 webpack 源码目录，通过 npm 装包
+
+3、然后，在 webpack 源码目录同级目录新建一个自己的项目 myProgram，用于调试 webpack
+
+做完上面三部，有基本目录结构：
 
 ```css
 webpack-source-code
-├── webpack-master // webpack 源码
-├── myProgram      // 调试 webpack 源码的项目
+├── webpack-master   // webpack 源码
+├── myProgram        // 调试 webpack 源码的项目
 │   ├── src
 │   │   ├── utils
 │   │   ├── └── math.js
@@ -36,7 +38,9 @@ webpack-source-code
 └── readme.md
 ```
 
-其中，build.js：
+4、调试项目中，使用 webpack
+
+> build.js：
 
 ```js
 const webpack = require('../webpack-master/lib/webpack')
@@ -63,7 +67,7 @@ compiler.run((err, stats) => {
 
 
 
-webpack.config.js:
+> webpack.config.js:
 
 ```js
 const path = require('path')
@@ -91,13 +95,13 @@ module.exports = {
 
 
 
-debug 调试：使用 vscode 内置的 debug 工具
+5、debug 调试：使用 vscode 内置的 debug 工具
 
-![](/imgs/img8.png)
+![](./imgs/img8.png)
 
 然后文件内写入：
 
-![](/imgs/img9.png)
+![](./imgs/img9.png)
 
 
 
@@ -527,7 +531,7 @@ class Compiler {
 
 ### 5、run() --> compile() 的一些 hook
 
-![](/imgs/img1.png)
+![](./imgs/img1.png)
 
 
 
@@ -798,7 +802,7 @@ class EntryPlugin {
 
 通过流程图表示这个注册 compilation 回调的流程：
 
-![](/imgs/img2.png)
+![](./imgs/img2.png)
 
 
 
@@ -1034,7 +1038,7 @@ class Compilation {
 
 简单的流程图：
 
-![](/imgs/img3.png)
+![](./imgs/img3.png)
 
 
 
@@ -1145,7 +1149,7 @@ class Module extends DependenciesBlock  {
 
 可以通过光标在 Module 上，鼠标右键打开菜但，点击 find all Implementations 找到
 
- ![](/imgs/img4.png)
+ ![](./imgs/img4.png)
 
 打开 webpack\lib\NormalModule.js 文件，可以看到：
 
@@ -1700,9 +1704,9 @@ class Compiler {
 
 一些 webpack4 的流程图
 
-![](/imgs/img5.png)
+![](./imgs/img5.png)
 
 
 
-![](/imgs/img6.jpg)
+![](./imgs/img6.jpg)
 
