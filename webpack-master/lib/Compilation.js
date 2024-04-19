@@ -2200,7 +2200,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 	// 目的是将 module 生成 chunk，并封存到 compilation.assets 中
 	// 在这个过程可以做各种各样的优化
 	seal(callback) {
-		// 生成 chunkGraph 实例
+		// 生成 chunkGraph 实例，是模块和 chunk 之间关系的核心数据结构
 		const chunkGraph = new ChunkGraph(this.moduleGraph);
 		this.chunkGraph = chunkGraph;
 
@@ -2220,22 +2220,31 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 
 		this.logger.time("create chunks");
 		this.hooks.beforeChunks.call();
+
+    // 创建 chunks 的初始化 Map，用于记录入口点与其直接和间接依赖的映射
 		/** @type {Map<Entrypoint, Module[]>} */
 		const chunkGraphInit = new Map();
-		for (const [name, { dependencies, includeDependencies, options }] of this
-			.entries) {
+
+		for (const [name, { dependencies, includeDependencies, options }] of this.entries) {
+      // 为每个入口点创建一个 chunk
 			const chunk = this.addChunk(name);
 			if (options.filename) {
 				chunk.filenameTemplate = options.filename;
 			}
+
+      // 创建Entrypoint对象，并设置其对应的 chunk
 			const entrypoint = new Entrypoint(options);
 			if (!options.dependOn && !options.runtime) {
 				entrypoint.setRuntimeChunk(chunk);
 			}
 			entrypoint.setEntrypointChunk(chunk);
+
+      // 记录入口点和其关联的 chunk group
 			this.namedChunkGroups.set(name, entrypoint);
 			this.entrypoints.set(name, entrypoint);
 			this.chunkGroups.push(entrypoint);
+
+      // 连接chunk group和chunk
 			connectChunkGroupAndChunk(entrypoint, chunk);
 
 			for (const dep of [...this.globalEntry.dependencies, ...dependencies]) {
@@ -2347,6 +2356,7 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 		}
 
 		// 用于创建 chunkGraph、moduleGraph
+    // 构建 chunk graph，确定 模块 如何分布在 chunks 中
 		buildChunkGraph(this, chunkGraphInit);
 		this.hooks.afterChunks.call(this.chunks);
 		this.logger.timeEnd("create chunks");
@@ -2518,7 +2528,7 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 							if (this.hooks.shouldGenerateChunkAssets.call() !== false) {
 								this.hooks.beforeChunkAssets.call();
 
-								// 创建 chunkAssets 资源
+								// 创建 chunkAssets 资源，将 chunk 转换为输出的 assets
 								this.createChunkAssets(err => {
 									this.logger.timeEnd("create chunk assets");
 									if (err) {
@@ -3748,6 +3758,7 @@ This prevents using hashes of each other and should be avoided.`);
 				/** @type {RenderManifestEntry[]} */
 				let manifest;
 				try {
+          // 获取 chunk 将要生成的 assets 的清单
 					manifest = this.getRenderManifest({
 						chunk,
 						hash: this.hash,
@@ -3764,6 +3775,8 @@ This prevents using hashes of each other and should be avoided.`);
 					this.errors.push(new ChunkRenderError(chunk, "", err));
 					return callback();
 				}
+
+        // 处理 manifest 中的每个文件
 				asyncLib.forEach(
 					manifest,
 					(fileManifest, callback) => {
@@ -3839,6 +3852,7 @@ This prevents using hashes of each other and should be avoided.`);
 									}
 								} else if (!source) {
 									// render the asset
+                  // 调用 render 方法渲染出最终的资源内容，触发 renderManifest 钩子
 									source = fileManifest.render();
 
 									// Ensure that source is a cached source to avoid additional cost because of repeated access

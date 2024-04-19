@@ -1102,7 +1102,7 @@ ${other}`);
 
 							logger.time("seal compilation");
 
-							// 执行seal 对 module 代码进行封装输出
+							// 执行 seal 对 module 代码进行封装输出，也就是将将 Module 打为 Chunk
 							compilation.seal(err => {
 								logger.timeEnd("seal compilation");
 								if (err) return callback(err);
