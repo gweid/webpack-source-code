@@ -434,7 +434,7 @@ class Compiler {
     // 定义了一个 onCompiled 函数，主要是传给 this.compile 作为执行的回调函数
     const onCompiled = (err, compilation) => {}
         
-    // run，主要是流程： beforeRun 钩子 --> beforeRun 钩子 --> this.compile
+    // run，主要是流程： beforeRun 钩子 --> run 钩子 --> this.compile
 		// 如果遇到 error，就执行 finalCallback
 		// 这里调用 beforeRun、run 主要就是提供 plugin 执行时机
 		const run = () => {
