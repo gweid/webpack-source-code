@@ -18,14 +18,14 @@
 
 2、接着，进入到 webpack 源码目录，通过 npm 装包
 
-3、然后，在 webpack 源码目录同级目录新建一个自己的项目 myProgram，用于调试 webpack
+3、然后，在 webpack 源码目录同级目录新建一个自己的项目 webpack-debug，用于调试 webpack
 
 做完上面三部，有基本目录结构：
 
 ```css
 webpack-source-code
-├── webpack-master   // webpack 源码
-├── myProgram        // 调试 webpack 源码的项目
+├── webpack                      // webpack 源码
+├── webpack-debug                // 调试 webpack 源码的项目
 │   ├── src
 │   │   ├── utils
 │   │   ├── └── math.js
@@ -43,7 +43,7 @@ webpack-source-code
 > build.js：
 
 ```js
-const webpack = require('../webpack-master/lib/webpack')
+const webpack = require('../webpack/lib/webpack')
 const config = require('./webpack.config')
 
 // 执行 webpack 函数有传回调函数
@@ -53,7 +53,7 @@ const config = require('./webpack.config')
 //   }
 // })
 
-// 执行 webpack 函数没有有传回调函数
+// 执行 webpack 函数如果没有传回调函数，需要手动调用一下 compiler.run 启动 webpack
 const compiler = webpack(config)
 // 需要手动调用一下 compiler.run
 compiler.run((err, stats) => {

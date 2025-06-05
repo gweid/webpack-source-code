@@ -1,4 +1,4 @@
-const webpack = require('../webpack-master/lib/webpack')
+const webpack = require('../webpack/lib/webpack')
 const config = require('./webpack.config')
 
 // 执行 webpack 函数有传回调函数
