@@ -16,7 +16,7 @@
 
 1、首先，下载 webpack 的源码：https://github.com/webpack/webpack
 
-2、接着，进入到 webpack 源码目录，通过 npm 装包
+2、接着，进入到 webpack 源码目录，通过 yarn 安装依赖
 
 3、然后，在 webpack 源码目录同级目录新建一个自己的项目 webpack-debug，用于调试 webpack
 
@@ -109,7 +109,7 @@ module.exports = {
 
 
 
-## webpack 的 compiler
+## compiler
 
 webpack 有两个主要的核心对象，一个是 compiler，另外一个是 compilation
 
@@ -1427,7 +1427,7 @@ class Compilation {
 
 
 
-## 对处理完成的模块 module 封装输出
+## 对模块 module 封装输出
 
 > webpack-master\lib\Compiler.js
 
