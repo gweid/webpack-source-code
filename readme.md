@@ -8,7 +8,7 @@
 
 
 
-## 准备工作
+## 调试webpack
 
 学会调试是阅读 webpack 源码的基础，下面来配置下调试环境
 
@@ -16,7 +16,11 @@
 
 1、首先，下载 webpack 的源码：https://github.com/webpack/webpack
 
+
+
 2、接着，进入到 webpack 源码目录，通过 yarn 安装依赖
+
+
 
 3、然后，在 webpack 源码目录同级目录新建一个自己的项目 webpack-debug，用于调试 webpack
 
@@ -37,6 +41,8 @@ webpack-source-code
 ├── .gitignore
 └── readme.md
 ```
+
+
 
 4、调试项目中，使用 webpack
 
@@ -105,7 +111,9 @@ module.exports = {
 
 
 
-后续即可通过断点，进行 webpack 源码单点调试
+6、开启调试
+
+![](./imgs/img10.png)
 
 
 
@@ -1427,7 +1435,7 @@ class Compilation {
 
 
 
-## 对模块 module 封装输出
+## 模块 module 封装输出
 
 > webpack-master\lib\Compiler.js
 
