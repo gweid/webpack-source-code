@@ -20,6 +20,8 @@
 
 2、接着，进入到 webpack 源码目录，通过 yarn 安装依赖
 
+> 建议使用 npm v14.18.1 版本
+
 
 
 3、然后，在 webpack 源码目录同级目录新建一个自己的项目 webpack-debug，用于调试 webpack

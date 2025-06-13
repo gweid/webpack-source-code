@@ -4,15 +4,13 @@
   "description": "",
   "main": "webpack.config.js",
   "scripts": {
-    "build": "node build.js",
-    "madge": "node madge.js"
+    "build": "node build.js"
   },
   "author": "",
   "license": "ISC",
   "devDependencies": {
     "@babel/core": "^7.13.14",
     "@babel/preset-env": "^7.13.12",
-    "babel-loader": "^8.2.2",
-    "madge": "^4.0.2"
+    "babel-loader": "^8.2.2"
   }
 }
