@@ -12,7 +12,11 @@ webpack 核心流程如下：
 
 ## 调试webpack
 
-学会调试是阅读 webpack 源码的基础，下面来配置下调试环境
+> 当前是基于 webpack5.24
+
+
+
+配置下调试环境：
 
 
 
@@ -22,11 +26,11 @@ webpack 核心流程如下：
 
 2、接着，进入到 webpack 源码目录，通过 yarn 安装依赖
 
-> 建议使用 npm v14.18.1 版本
+> 建议使用 node v14.18.1 版本
 
 
 
-3、然后，在 webpack 源码目录同级目录新建一个自己的项目 webpack-debug，用于调试 webpack
+3、然后，在 webpack 源码目录同级目录新建一个自己的项目 webpack-debug，webpack-debug 里面写一些需要经过 wbepack 转换的代码，用于调试 webpack
 
 做完上面三部，有基本目录结构：
 
@@ -112,6 +116,24 @@ module.exports = {
 然后文件内写入：
 
 ![](./imgs/img9.png)
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "webpack-debug",
+      "program": "${workspaceFolder}/webpack-debug/build.js",
+      "request": "launch",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "type": "node",
+      "console": "integratedTerminal"
+    }
+  ]
+}
+```
 
 
 
