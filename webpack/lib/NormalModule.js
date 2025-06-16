@@ -703,6 +703,8 @@ class NormalModule extends Module {
 				return callback(error);
 			}
 
+      // ! 将经过 loader 转换后的结果转换为 webpack 内部的源码对象
+      // ! 并存储到 this._source 属性上
 			this._source = this.createSource(
 				options.context,
 				this.binary ? asBuffer(source) : asString(source),
@@ -710,13 +712,17 @@ class NormalModule extends Module {
 				compilation.compiler.root
 			);
 			if (this._sourceSizes !== undefined) this._sourceSizes.clear();
+
+      // ! 源代码有了，存储在 this._source 中
+      // ! 还差 ast 用来分析模块的依赖
 			this._ast =
 				typeof extraInfo === "object" &&
 				extraInfo !== null &&
 				extraInfo.webpackAST !== undefined
 					? extraInfo.webpackAST
 					: null;
-			// 执行 doBuild 的 callback
+			// ! 执行 doBuild 的 callback
+      // ! doBuild 的 callback 会执行 parser.parse，这一步就是进行 AST 转换
 			return callback();
 		};
 
@@ -994,7 +1000,7 @@ class NormalModule extends Module {
 
 			let result;
 			try {
-        // 解析模块内容
+        // ! 解析模块内容
 				result = this.parser.parse(this._ast || this._source.source(), {
 					current: this,
 					module: this,

@@ -309,6 +309,7 @@ class NormalModuleFactory extends ModuleFactory {
 										return callback(new Error("Empty dependency (no request)"));
 									}
 
+                  // ! 创建一个标准的 NormalModule 实例
 									createdModule = new NormalModule(createData);
 								}
 
@@ -318,6 +319,7 @@ class NormalModuleFactory extends ModuleFactory {
 									resolveData
 								);
 
+                // ! 将创建的模块实例返回
 								return callback(null, createdModule);
 							}
 						);
@@ -646,6 +648,7 @@ class NormalModuleFactory extends ModuleFactory {
 	 * @param {function(Error=, ModuleFactoryResult=): void} callback callback
 	 * @returns {void}
 	 */
+  // ! 创建标准模块实例，将依赖转换为实际的模块
 	create(data, callback) {
 		const dependencies = /** @type {ModuleDependency[]} */ (data.dependencies);
 		if (this.unsafeCache) {
@@ -707,6 +710,7 @@ class NormalModuleFactory extends ModuleFactory {
 					)
 				);
 
+      // ! factorize 钩子会创建一个模块实例
 			this.hooks.factorize.callAsync(resolveData, (err, module) => {
 				if (err) {
 					return callback(err, {

@@ -495,6 +495,8 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 				code
 			);
 		};
+
+		// ! 定义属于 compilation 的钩子
 		this.hooks = Object.freeze({
 			/** @type {SyncHook<[Module]>} */
 			buildModule: new SyncHook(["module"]),
@@ -753,6 +755,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 				return getNormalModuleLoader();
 			}
 		});
+
 		/** @type {string=} */
 		this.name = undefined;
 		this.startTime = undefined;
@@ -819,7 +822,9 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 			}
 		});
 
+    // ! 初始化一个模块依赖图
 		this.moduleGraph = new ModuleGraph();
+
 		this.chunkGraph = undefined;
 		/** @type {CodeGenerationResults} */
 		this.codeGenerationResults = undefined;
@@ -828,6 +833,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 		this.processDependenciesQueue = new AsyncQueue({
 			name: "processDependencies",
 			parallelism: options.parallelism || 100,
+      // ! processor 就是队列的处理函数，也就是将一个任务添加进队列，那么使用 processor 处理这个任务
 			processor: this._processModuleDependencies.bind(this)
 		});
 		/** @type {AsyncQueue<Module, string, Module>} */
@@ -835,21 +841,27 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 			name: "addModule",
 			parent: this.processDependenciesQueue,
 			getKey: module => module.identifier(),
-			// processor：处理方法，调用 this._addModule
+			// ! processor：处理方法，调用 this._addModule
+      // ! processor 就是队列的处理函数，也就是将一个任务添加进队列，那么使用 processor 处理这个任务
 			processor: this._addModule.bind(this)
 		});
 		/** @type {AsyncQueue<FactorizeModuleOptions, string, Module>} */
 		this.factorizeQueue = new AsyncQueue({
 			name: "factorize",
 			parent: this.addModuleQueue,
-			// processor：处理方法，调用 this._factorizeModule
+			// ! processor：处理方法，调用 this._factorizeModule
+      // ! processor 就是队列的处理函数，也就是将一个任务添加进队列，那么使用 processor 处理这个任务
 			processor: this._factorizeModule.bind(this)
 		});
 		/** @type {AsyncQueue<Module, Module, Module>} */
+
+    // ! 创建 buildQueue 队列
+    // ! 注意这里会将 this._buildModule 传入，负责模块的构建过程
 		this.buildQueue = new AsyncQueue({
 			name: "build",
 			parent: this.factorizeQueue,
-			// processor：处理方法，调用 this._buildModule
+			// ! processor：处理方法，调用 this._buildModule
+      // ! processor 就是队列的处理函数，也就是将一个任务添加进队列，那么使用 processor 处理这个任务
 			processor: this._buildModule.bind(this)
 		});
 		/** @type {AsyncQueue<Module, Module, Module>} */
@@ -1137,7 +1149,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 	 * @returns {void}
 	 */
 	addModule(module, callback) {
-		// 将模块添加到 addModuleQueue
+		// ! 将模块添加到 addModuleQueue
 		this.addModuleQueue.add(module, callback);
 	}
 
@@ -1175,7 +1187,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 				module = cacheModule;
 			}
 
-			// 添加创建的 module 到 modules
+			// ! 将创建的 module 添加到 modules 中
 			this._modules.set(identifier, module);
 			this.modules.add(module);
 
@@ -1214,6 +1226,14 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 	 * @returns {void}
 	 */
 	buildModule(module, callback) {
+    // ! 将模块添加到 buildQueue 队列，并且这里面会调用 _buildModule 进行模块的构建
+    // ! 因为创建 buildQueue 的时候，会传入 this._buildModule 方法
+    // ! 在执行 buildQueue.add 的时候，会调用 _buildModule 方法
+    // this.buildQueue = new AsyncQueue({
+		// 	name: "build",
+		// 	parent: this.factorizeQueue,
+		// 	processor: this._buildModule.bind(this)
+		// });
 		this.buildQueue.add(module, callback);
 	}
 
@@ -1232,7 +1252,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 			currentProfile.markBuildingStart();
 		}
 
-		// 判断当前模块需不需要构建，需要构建就执行回调
+		// ! 判断当前模块需不需要构建，需要构建就执行回调
 		module.needBuild(
 			{
 				fileSystemInfo: this.fileSystemInfo,
@@ -1252,7 +1272,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 				this.hooks.buildModule.call(module);
 				this.builtModules.add(module);
 
-				// 对模块进行构建
+				// ! 对模块进行构建
 				// 但是这里直接点进 module.build 里面，会发现里面只是抛出了一个错误
 				// 其实这里是使用了多态，module.build 是类 Moudle 上的方法，同时 Module 是一个父类
 				// 其他子类继承父类 Moudle，并对 build 方法进行重写
@@ -1328,6 +1348,8 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 	 * @param {ModuleCallback} callback callback to be triggered
 	 * @returns {void}
 	 */
+  // ! 模块转了 ast 之后，使用这个函数收集、分类和组织当前模块的所有依赖
+  // ! 也就是递归遍历模块的所有依赖
 	_processModuleDependencies(module, callback) {
 		const dependencies = new Map();
 
@@ -1422,6 +1444,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 		asyncLib.forEach(
 			sortedDependencies,
 			(item, callback) => {
+        // ! 处理模块依赖
 				this.handleModuleCreation(item, err => {
 					// In V8, the Error objects keep a reference to the functions on the stack. These warnings &
 					// errors are created inside closures that keep a reference to the Compilation, so errors are
@@ -1457,6 +1480,8 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 	 * @param {ModuleCallback} callback callback
 	 * @returns {void}
 	 */
+  // ! 负责模块的创建、添加和构建过程
+  // ! 这个函数实现了 webpack 模块依赖图的构建流程
 	handleModuleCreation(
 		{
 			factory,
@@ -1468,12 +1493,15 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 		},
 		callback
 	) {
-		// 创建了模块图
+		// ! 模块依赖图
 		const moduleGraph = this.moduleGraph;
 
 		const currentProfile = this.profile ? new ModuleProfile() : undefined;
 		
-		// 执行 factorizeModule 函数，将传入的参数加到队列 factorizeQueue
+		// ! 调用 factorizeModule 将依赖转换为模块
+    // ! 这个过程将依赖添加到 factorizeQueue 队列
+    // ! 队列处理时会调用 factory.create() 创建实际的模块
+    // ! 创建完成后返回新模块 newModule
 		this.factorizeModule(
 			{
 				currentProfile,
@@ -1484,7 +1512,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 				context
 			},
 			(err, newModule) => {
-				// this.factorizeModule 执行完会将新模块 newModule 返回，接下来就是拿到新模块进行处理
+				// ! this.factorizeModule 执行完会将新模块 newModule 返回，接下来就是拿到新模块进行处理
 				if (err) {
 					if (dependencies.every(d => d.optional)) {
 						this.warnings.push(err);
@@ -1512,7 +1540,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 				 * 通过 compilation.factorizeModule 的回调函数中接收 factorizeQueue.add 返回的 newModule
 				 * 最后通过 compilation.addModule 添加 newModule 模块
 				 */
-
+        // ! 主要作用：将模块添加到 addModuleQueue 队列， 建立依赖与模块之间的关系，更新模块图 moduleGraph
 				this.addModule(newModule, (err, module) => {
 					if (err) {
 						if (!err.module) {
@@ -1523,6 +1551,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 						return callback(err);
 					}
 
+          // ! 建立依赖与模块之间的关系，更新模块图 moduleGraph
 					for (let i = 0; i < dependencies.length; i++) {
 						const dependency = dependencies[i];
 						moduleGraph.setResolvedModule(
@@ -1591,7 +1620,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 					 * 
 					 * 在 compilation.addModule 的回调中继续调用 compilation.buildModule
 					 */
-
+          // ! 构建模块，解析模块内容
 					this.buildModule(module, err => {
 						if (creatingModuleDuringBuildSet !== undefined) {
 							creatingModuleDuringBuildSet.delete(module);
@@ -1627,7 +1656,6 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 						 * 需要构建，执行 module.needBuild 的回调，回调里面执行 module.build 对模块进行构建
 						 * this.buildModule 回调里面继续调用 compilation.processModuleDependencies
 						 */
-
 						this.processModuleDependencies(module, err => {
 							if (err) {
 								return callback(err);
@@ -1680,7 +1708,8 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 			currentProfile.markFactoryStart();
 		}
 
-		// 对模块进行解析
+		// ! 对模块进行解析
+    // ! factory 是 NormalModuleFactory 的实例，通过 new NormalModuleFactory 创建
 		factory.create(
 			{
 				contextInfo: {
@@ -1783,7 +1812,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 			);
 		}
 
-		// 处理模块并对模块进行创建
+		// ! 处理模块并对模块进行创建
 		this.handleModuleCreation(
 			{
 				factory: moduleFactory,
@@ -1813,7 +1842,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 	 * @param {ModuleCallback} callback callback function
 	 * @returns {void} returns
 	 */
-	// 这个函数的主要作用就是通过 _addEntryItem 添加入口，因为编译需要从入口开始
+	// ! 这个函数的主要作用就是通过 _addEntryItem 添加入口，因为编译需要从入口开始
 	addEntry(context, entry, optionsOrName, callback) {
 		// TODO webpack 6 remove
 		const options =
@@ -1821,7 +1850,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 				? optionsOrName
 				: { name: optionsOrName };
 
-    // 添加入口文件
+    // ! 添加入口文件
 		this._addEntryItem(context, entry, "dependencies", options, callback);
 	}
 
@@ -1892,7 +1921,7 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 		// 调用 addEntry 钩子
 		this.hooks.addEntry.call(entry, options);
 		
-		// 调用 this.addModuleTree 将当前的模块加入到 module tree(模块树)	
+		// ! 调用 this.addModuleTree 将当前的模块加入到 module tree(模块树)	
 		this.addModuleTree(
 			{
 				context,
@@ -2196,11 +2225,11 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 	 * @param {Callback} callback signals when the call finishes
 	 * @returns {void}
 	 */
-	// 当模块解析完，就来到了 seal 阶段，对处理过的代码进行封装输出
-	// 目的是将 module 生成 chunk，并封存到 compilation.assets 中
-	// 在这个过程可以做各种各样的优化
+	// ! 当模块解析完，就来到了 seal 阶段，对处理过的代码进行封装输出
+	// ! 目的是将 module 生成 chunk，并封存到 compilation.assets 中
+	// ! 在这个过程可以做各种各样的优化
 	seal(callback) {
-		// 生成 chunkGraph 实例，是模块和 chunk 之间关系的核心数据结构
+		// ! 生成 chunkGraph 实例，是模块和 chunk 之间关系的核心数据结构
 		const chunkGraph = new ChunkGraph(this.moduleGraph);
 		this.chunkGraph = chunkGraph;
 
@@ -2221,18 +2250,19 @@ BREAKING CHANGE: Asset processing hooks in Compilation has been merged into a si
 		this.logger.time("create chunks");
 		this.hooks.beforeChunks.call();
 
-    // 创建 chunks 的初始化 Map，用于记录入口点与其直接和间接依赖的映射
+    // ! 创建 chunks 的初始化 Map，用于记录入口点与其直接和间接依赖的映射
 		/** @type {Map<Entrypoint, Module[]>} */
 		const chunkGraphInit = new Map();
 
+    // ! 这个循环遍历 this.entries 中的所有入口配置，为每个入口创建 chunk、entrypoint 和相关的数据结构，并建立它们之间的连接关系
 		for (const [name, { dependencies, includeDependencies, options }] of this.entries) {
-      // 为每个入口点创建一个 chunk
+      // ! 为每个入口点创建一个 chunk
 			const chunk = this.addChunk(name);
 			if (options.filename) {
 				chunk.filenameTemplate = options.filename;
 			}
 
-      // 创建Entrypoint对象，并设置其对应的 chunk
+      // ! 创建Entrypoint对象，并设置其对应的 chunk
 			const entrypoint = new Entrypoint(options);
 			if (!options.dependOn && !options.runtime) {
 				entrypoint.setRuntimeChunk(chunk);
@@ -2355,32 +2385,39 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 			}
 		}
 
-		// 用于创建 chunkGraph、moduleGraph
-    // 构建 chunk graph，确定 模块 如何分布在 chunks 中
+
+    // ! ------------------------------ 创建 Chunks
+
+		// ! 用于创建 chunkGraph
+    // ! 从入口模块开始，递归地将所有相关模块分配到 chunks 中, 建立模块间的连接关系
+    // ! 这一步很重要，因为这很大程度决定了哪些模块要合并到哪个 chunk 中（下面还有 SplitChunksPlugin 可以决定 chunk 划分）
 		buildChunkGraph(this, chunkGraphInit);
+
 		this.hooks.afterChunks.call(this.chunks);
 		this.logger.timeEnd("create chunks");
 
 		this.logger.time("optimize");
 
-		// 触发钩子 optimize，代表优化开始
+
+    // ! ------------------------------ 优化阶段
+
+		// ! 触发优化钩子 optimize，代表优化开始
 		this.hooks.optimize.call();
 
-		// 执行各种优化 module
+		// ! 触发模块（module）级别优化
 		while (this.hooks.optimizeModules.call(this.modules)) {
 			/* empty */
 		}
-		// 钩子 afterOptimizeModules，代表 module 已经优化完
+		// ! 钩子 afterOptimizeModules，代表 module 已经优化完
 		this.hooks.afterOptimizeModules.call(this.modules);
 		
-		// 执行各种优化 chunk
+		// ! 出发 chunk 级别的优化
 		while (this.hooks.optimizeChunks.call(this.chunks, this.chunkGroups)) {
 			/* empty */
 		}
-		// 钩子 afterOptimizeChunks，代表 chunk 已经优化完
+		// !钩子 afterOptimizeChunks，代表 chunk 已经优化完
 		this.hooks.afterOptimizeChunks.call(this.chunks, this.chunkGroups);
 
-		// 优化 modules 树
 		this.hooks.optimizeTree.callAsync(this.chunks, this.modules, err => {
 			if (err) {
 				return callback(
@@ -2391,7 +2428,7 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 			// 触发 afterOptimizeTree 钩子，代表 modules 树优化结束
 			this.hooks.afterOptimizeTree.call(this.chunks, this.modules);
 
-			// 对代码进行优化阶段
+			// ! 进行 chunck 优化阶段
 			this.hooks.optimizeChunkModules.callAsync(
 				this.chunks,
 				this.modules,
@@ -2403,7 +2440,6 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 					}
 
 					// 下面是触发各种优化的钩子
-
 					this.hooks.afterOptimizeChunkModules.call(this.chunks, this.modules);
 
 					const shouldRecord = this.hooks.shouldRecord.call() !== false;
@@ -2434,7 +2470,7 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 
 					this.logger.time("module hashing");
 					this.hooks.beforeModuleHash.call();
-					// 生成 module 的 hash
+					// ! 生成 module 的 hash，用于缓存和内容跟踪
 					this.createModuleHashes();
 					this.hooks.afterModuleHash.call();
 					this.logger.timeEnd("module hashing");
@@ -2442,8 +2478,10 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 					this.logger.time("code generation");
 					this.hooks.beforeCodeGeneration.call();
 
-					// 代码生成的阶段
-					// 调用 codeGeneration 方法用于生成编译好的代码
+					// ! ------------------------------ 代码生成阶段
+					// ! 为已经分配到 chunk 中的模块生成最终的 JavaScript 代码
+          // ! 这是 webpack 从模块依赖图到实际输出资源的关键转换步骤
+          // ! 经过上面的 buildChunkGraph 和 SplitChunksPlugin，知道哪些模块分配在哪些 chunk 中
 					this.codeGeneration(err => {
 						if (err) {
 							return callback(err);
@@ -2459,12 +2497,13 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 
 						this.logger.time("hashing");
 						this.hooks.beforeHash.call();
+            // ! 为 chunks 和资源创建哈希值, 这些哈希值用于长期缓存和文件命名
 						const codeGenerationJobs = this.createHash();
 						this.hooks.afterHash.call();
 						this.logger.timeEnd("hashing");
 						
-						// 执行代码生成的方法 _runCodeGenerationJobs
-						// _runCodeGenerationJobs 中会执行 this._codeGenerationModule，这个方法会根据 tempalte 生成代码 
+						// ! 执行代码生成的方法 _runCodeGenerationJobs
+						// ! _runCodeGenerationJobs 中会执行 this._codeGenerationModule，这个方法会根据 tempalte 生成代码 
 						this._runCodeGenerationJobs(codeGenerationJobs, err => {
 							if (err) {
 								return callback(err);
@@ -2477,10 +2516,13 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 							}
 
 							this.logger.time("module assets");
+
+              // ! 清除现有资源
 							this.clearAssets();
 
 							this.hooks.beforeModuleAssets.call();
-							// 创建 moduleAssets 资源
+
+							// ! 创建 moduleAssets 资源
 							this.createModuleAssets();
 							this.logger.timeEnd("module assets");
 
@@ -2528,7 +2570,8 @@ Or do you want to use the entrypoints '${name}' and '${runtime}' independently o
 							if (this.hooks.shouldGenerateChunkAssets.call() !== false) {
 								this.hooks.beforeChunkAssets.call();
 
-								// 创建 chunkAssets 资源，将 chunk 转换为输出的 assets
+								// ! 创建 chunkAssets 资源，将 chunk 转换为输出的 assets
+                // ! 根据模块内容生成 chunk 资源
 								this.createChunkAssets(err => {
 									this.logger.timeEnd("create chunk assets");
 									if (err) {

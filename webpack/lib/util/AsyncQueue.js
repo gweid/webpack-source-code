@@ -60,7 +60,9 @@ class AsyncQueue {
 	constructor({ name, parallelism, parent, processor, getKey }) {
 		this._name = name;
 		this._parallelism = parallelism || 1;
+
 		this._processor = processor;
+
 		this._getKey =
 			getKey || /** @type {(T) => K} */ (item => /** @type {any} */ (item));
 		/** @type {Map<K, AsyncQueueEntry<T, K, R>>} */
@@ -136,6 +138,7 @@ class AsyncQueue {
 				root._needProcessing = true;
 				if (root._willEnsureProcessing === false) {
 					root._willEnsureProcessing = true;
+          // ! 执行 _ensureProcessing 方法
 					setImmediate(root._ensureProcessing);
 				}
 				this.hooks.added.call(item);
@@ -231,6 +234,7 @@ class AsyncQueue {
 			if (entry === undefined) break;
 			this._activeTasks++;
 			entry.state = PROCESSING_STATE;
+      // ! 执行 _startProcessing 方法
 			this._startProcessing(entry);
 		}
 		this._willEnsureProcessing = false;
@@ -262,6 +266,7 @@ class AsyncQueue {
 			}
 			let inCallback = false;
 			try {
+        // ! 执行 processor 方法(就是 compilation._buildModule)
 				this._processor(entry.item, (e, r) => {
 					inCallback = true;
 					this._handleResult(entry, e, r);

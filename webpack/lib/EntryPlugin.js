@@ -42,14 +42,16 @@ class EntryPlugin {
 			}
 		);
 
-    // 注册 compiler 的 make 钩子，用来开启编译
+    // ! 注册 compiler 的 make 钩子，用来开启编译
 		compiler.hooks.make.tapAsync("EntryPlugin", (compilation, callback) => {
 			const { entry, options, context } = this;
 
-			// 创建依赖
+			// ! 创建一个入口依赖对象
+      // ! 入口依赖（Entry Dependency）是 webpack 依赖图的起点
+      // ! 这个依赖对象告诉 webpack 从哪个文件开始解析
 			const dep = EntryPlugin.createDependency(entry, options);
 
-			// 调用 compilation 的 addEntry 方法，添加入口
+			// ! 调用 compilation 的 addEntry 方法，添加入口
 			compilation.addEntry(context, dep, options, err => {
 				callback(err);
 			});

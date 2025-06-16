@@ -55,14 +55,14 @@ const createMultiCompiler = (childOptions, options) => {
  * @param {WebpackOptions} rawOptions options object
  * @returns {Compiler} a compiler
  */
-// 创建 compiler
+// ! 创建 compiler
 const createCompiler = rawOptions => {
 	// 格式化、初始化传进来的参数（如 output、devserver、plugin 给赋值一些默认的配置格式，防止后面使用时报错）
 	// getNormalizedWebpackOptions + applyWebpackOptionsBaseDefaults 合并出最终的 webpack 配置
 	const options = getNormalizedWebpackOptions(rawOptions);
 	applyWebpackOptionsBaseDefaults(options);
 
-	// 通过 new Compiler 得到一个 compiler 对象
+	// ! 通过 new Compiler 得到一个 compiler 对象
 	const compiler = new Compiler(options.context);
 	// 将 options（经过格式化后的 webpack.config.js ）挂载到 compiler 上
 	compiler.options = options;
@@ -93,9 +93,9 @@ const createCompiler = rawOptions => {
 	compiler.hooks.environment.call();
 	compiler.hooks.afterEnvironment.call();
 
-	// WebpackOptionsApply().process 主要用来处理 config 文件中除了 plugins 的其他属性
-	// 这个东西非常重要，会将配置的一些属性转换成插件注入到 webpack 中 
-	// 例如：入口 entry 就被转换成了插件注入到 webpack 中 
+	// ! WebpackOptionsApply().process 主要用来处理 config 文件中除了 plugins 的其他属性
+	// ! 这个函数会将配置的一些属性转换成插件注入到 webpack 中 
+	// ! 例如：入口 entry 就被转换成了插件注入到 webpack 中 
 	new WebpackOptionsApply().process(options, compiler);
 	// 调用 initialize 钩子
 	compiler.hooks.initialize.call();
@@ -125,7 +125,7 @@ const webpack = /** @type {WebpackFunctionSingle & WebpackFunctionMulti} */ (
 	 */
 	(options, callback) => {
 		const create = () => {
-			// 检验传入的配置文件【webpack.config.js】是否符合 webpack 内部定义的 webpackOptionsSchema 范式
+			// ! 检验传入的配置文件【webpack.config.js】是否符合 webpack 内部定义的 webpackOptionsSchema 范式
 			validateSchema(webpackOptionsSchema, options);
 			/** @type {MultiCompiler|Compiler} */
 
@@ -135,7 +135,7 @@ const webpack = /** @type {WebpackFunctionSingle & WebpackFunctionMulti} */ (
 			/** @type {WatchOptions|WatchOptions[]} */
 			let watchOptions;
 
-			// 如果传入的 webpack.config.js 中的配置是数组，一般很少，对象跟函数居多
+			// ! 如果传入的 webpack.config.js 中的配置是数组，一般很少，对象跟函数居多
 			if (Array.isArray(options)) {
 				/** @type {MultiCompiler} */
 				compiler = createMultiCompiler(options, options);
@@ -143,7 +143,7 @@ const webpack = /** @type {WebpackFunctionSingle & WebpackFunctionMulti} */ (
 				watchOptions = options.map(options => options.watchOptions || {});
 			} else {
 				/** @type {Compiler} */
-				// 2.通过 createCompiler 创建一个 compiler
+				// ! 2.通过 createCompiler 创建一个 compiler
 				compiler = createCompiler(options);
 				// 拿到 webpack.config.js 中的 watch、watchOptions
 				watch = options.watch;

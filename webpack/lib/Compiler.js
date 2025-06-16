@@ -420,7 +420,9 @@ class Compiler {
 
 		this.running = true;
 		
-		// 定义了一个 onCompiled 函数，主要是传给 this.compile 作为执行的回调函数
+		// ! 定义了一个 onCompiled 函数，主要是传给 this.compile 作为执行的回调函数
+    // ! 编译过程完成后执行 onCompiled
+    // ! 这是 webpack 编译流程中的一个关键回调点，它标志着单次编译周期的结束
 		const onCompiled = (err, compilation) => {
 			if (err) return finalCallback(err);
 
@@ -439,7 +441,7 @@ class Compiler {
 				logger = compilation.getLogger("webpack.Compiler");
 				logger.time("emitAssets");
 				
-				// 输出结果
+				// ! 输出结果
 				this.emitAssets(compilation, err => {
 					logger.timeEnd("emitAssets");
 					if (err) return finalCallback(err);
@@ -464,6 +466,9 @@ class Compiler {
 					}
 
 					logger.time("emitRecords");
+
+          // ! 将本次构建的关键信息（如模块 ID、Chunk Hash 等）写入磁盘文件
+          // ! 供下次构建时复用，以实现增量构建的优化
 					this.emitRecords(err => {
 						logger.timeEnd("emitRecords");
 						if (err) return finalCallback(err);
@@ -471,10 +476,17 @@ class Compiler {
 						compilation.startTime = startTime;
 						compilation.endTime = Date.now();
 						logger.time("done hook");
+
+            // ! 创建 stats 对象，用来存储 webpack 的统计信息
 						const stats = new Stats(compilation);
+
+            // ! 触发 done 钩子
 						this.hooks.done.callAsync(stats, err => {
 							logger.timeEnd("done hook");
 							if (err) return finalCallback(err);
+
+              // ! 将编译过程中的构建依赖信息保存到缓存中
+              // ! 构建依赖可能包括：配置文件、loader 脚本、插件代码等
 							this.cache.storeBuildDependencies(
 								compilation.buildDependencies,
 								err => {
@@ -488,7 +500,7 @@ class Compiler {
 			});
 		};
 
-		// run，主要是流程： beforeRun 钩子 --> beforeRun 钩子 --> this.compile
+		// run，主要是流程： beforeRun 钩子 --> run 钩子 --> this.compile
 		// 如果遇到 error，就执行 finalCallback
 		// 这里调用 beforeRun、run 主要就是提供 plugin 执行时机
 		const run = () => {
@@ -856,6 +868,7 @@ ${other}`);
 	 * @param {Callback<void>} callback signals when the call finishes
 	 * @returns {void}
 	 */
+  // ! 将本次构建的关键信息（如模块 ID、Chunk Hash 等）写入磁盘文件，供下次构建时复用，以实现增量构建的优化
 	emitRecords(callback) {
 		if (!this.recordsOutputPath) return callback();
 
@@ -1022,6 +1035,7 @@ ${other}`);
 	 * @returns {Compilation} the created compilation
 	 */
 	newCompilation(params) {
+    // ! 创建一个 compilation 对象
 		const compilation = this.createCompilation();
 		compilation.name = this.name;
 		compilation.records = this.records;
@@ -1051,6 +1065,7 @@ ${other}`);
 
 	newCompilationParams() {
 		const params = {
+      // ! new NormalModuleFactory 实例
 			normalModuleFactory: this.createNormalModuleFactory(),
 			contextModuleFactory: this.createContextModuleFactory()
 		};
@@ -1062,24 +1077,26 @@ ${other}`);
 	 * @returns {void}
 	 */
 	compile(callback) {
-		// 初始化 compilation 的参数
+		// ! 初始化 compilation 的参数
+    // ! 会得到 normalModuleFactory 实例
 		const params = this.newCompilationParams();
 		
-		// 钩子 beforeCompile
+		// ! 触发钩子 beforeCompile
 		this.hooks.beforeCompile.callAsync(params, err => {
 			if (err) return callback(err);
 			
-			// 钩子 compile
+			// ! 执行钩子 compile
 			this.hooks.compile.call(params);
 			
-			// 通过 this.newCompilation 返回一个 compilation 对象
+			// ! 通过 this.newCompilation 创建一个 compilation 对象
 			const compilation = this.newCompilation(params);
 
 			const logger = compilation.getLogger("webpack.Compiler");
 
 			logger.time("make hook");
 
-			// 钩子 make，这个钩子里面就是真正使用 compilation 执行编译的
+			// ! 触发钩子 make，这个钩子里面就是真正使用 compilation 执行编译的
+      // ! hooks.make 钩子在 EntryPlugin 中定义
 			this.hooks.make.callAsync(compilation, err => {
 				logger.timeEnd("make hook");
 				if (err) return callback(err);
@@ -1102,7 +1119,8 @@ ${other}`);
 
 							logger.time("seal compilation");
 
-							// 执行 seal 对 module 代码进行封装输出，也就是将将 Module 打为 Chunk
+							// ! 执行 seal 对 module 代码进行封装输出，将 Module 转为 Chunk
+              // ! 这个过程还会做一系列的优化
 							compilation.seal(err => {
 								logger.timeEnd("seal compilation");
 								if (err) return callback(err);
@@ -1114,6 +1132,7 @@ ${other}`);
 									logger.timeEnd("afterCompile hook");
 									if (err) return callback(err);
 
+                  // ! 执行回调，即上面定义的 onCompiled 函数
 									return callback(null, compilation);
 								});
 							});

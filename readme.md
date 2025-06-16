@@ -4,7 +4,9 @@
 
 
 
-![](./imgs/img7.jpg)
+webpack 核心流程如下：
+
+![](./imgs/img7.png)
 
 
 
@@ -119,13 +121,81 @@ module.exports = {
 
 
 
+## tapable
+
+在真正开始阅读 webpack 源码之前，先了解下 tapable，它是 webpack 中事件流管理的核心，类似发布订阅
+
+
+
+### tapable 是什么
+
+`tapable`是`webpack`的核心模块，也是`webpack`团队维护的，是`webpack plugin`的基本实现方式。主要的作用就是：基于事件流程管理
+
+
+
+### tapable 的基本使用
+
+以 AsyncSeriesHook这个 hook 为例：
+
+```js
+const { AsyncSeriesHook } = require("tapable")
+
+// 创建一个 SyncHook 类型的 hook
+const run = new AsyncSeriesHook(["compiler"])
+```
+
+SyncHook 就是 tapable 中提供的某一个用于创建某一类 hook 的类，通过 new 来生成实例。构造函数 constructor 接收一个数组，数组有多少项，**表示生成的这个实例注册回调的时候接收多少个参数**
+
+hook 的主要有两个实例：
+
+- `tap`：就是**注册事件回调**的方法
+- `call`：就是触发事件，**执行 tap 中回调的方法**
+
+所以有，注册事件回调：
+
+```js
+run.tapAsync('myRun', (compiler) => {
+    console.log(compiler)
+})
+```
+
+这样就通过 tab 把事件回调函数注册好了。而这个事件调用时机就是在执行 call 的时候调用
+
+```js
+run.callAsync(compiler)
+```
+
+执行 call，就会调用之前注册的回调，并把 compiler 当做参数传过去
+
+
+
+所以 tabpad 的使用主要就是三步：
+
+1. new 一个 hook 类
+2. 使用 tab 注册回调
+3. 在 call 的时候执行回调
+
+
+
+### 一些常用的 tapable hook
+
+可以参考 https://juejin.cn/post/6939794845053485093
+
+
+
+### tapable 基本原理
+
+可以参考：https://juejin.cn/post/6946094725703139358
+
+
+
 ## compiler
 
 webpack 有两个主要的核心对象，一个是 compiler，另外一个是 compilation
 
 
 
-### 1、从 webpack(config, callback) 函数开始
+### webpack 函数
 
 webpack 函数接收两个参数：
 
@@ -153,7 +223,7 @@ const webpack = (options, callback) => {
         watchOptions = options.watchOptions || {};
         
         // 返回 compiler, watch, watchOptions
-	    return { compiler, watch, watchOptions };
+	      return { compiler, watch, watchOptions };
     }
     
     /**
@@ -213,7 +283,7 @@ compiler.run((err, stats) => {
 
 
 
-### 2、创建 compiler
+### 创建 compiler
 
 由上面的 webpack() 可以看出，compiler 由 createCompiler 这个函数返回，看看 createCompiler 这个函数
 
@@ -378,7 +448,7 @@ class Compiler {
 
 
 
-### 3、compiler.run()
+### compiler.run
 
 再回到 build.js 文件 和 webpack() 这个函数：
 
@@ -402,6 +472,8 @@ compiler.run((err, stats) => {
 })
 ```
 
+
+
 webpack() 函数：
 
 > webpack-master\lib\webpack.js
@@ -419,6 +491,8 @@ const webpack = (options, callback) => {
     }
 }
 ```
+
+
 
 可以看到，执行 webpack() 函数的重要一步就是调用 compiler.run，现在回到 Compiler 这个类身上,看看 run 方法：
 
@@ -444,7 +518,7 @@ class Compiler {
     // 定义了一个 onCompiled 函数，主要是传给 this.compile 作为执行的回调函数
     const onCompiled = (err, compilation) => {}
         
-    // run，主要是流程： beforeRun 钩子 --> beforeRun 钩子 --> this.compile
+    // run，主要是流程： beforeRun 钩子 --> run 钩子 --> this.compile
 		// 如果遇到 error，就执行 finalCallback
 		// 这里调用 beforeRun、run 主要就是提供 plugin 执行时机
 		const run = () => {
@@ -477,11 +551,11 @@ class Compiler {
 3. 定义了 run，主要流程就是：beforeRun 钩子 --> run 钩子 --> this.compile，如果遇到 error，就执行 finalCallback
 4. 执行 compiler.run 内部定义的 run()
 
-而 compiler.run 内部定义的 run 实际上就是调用了 this.compile，也就是 Compiler 上的 compile 方法
+而 compiler.run 内部定义的 run 实际上就是调用了  Compiler 上的 compile 方法
 
 
 
-### 4、compiler.compile ()
+### compiler.compile
 
 现在看看 compiler.run 里面调用的 compile 函数
 
@@ -500,28 +574,28 @@ class Compiler {
       // 钩子 compile
 			this.hooks.compile.call(params);
             
-      // 通过 this.newCompilation 返回一个 compilation 对象
+      // 通过 this.newCompilation 创建一个 compilation 对象
 			const compilation = this.newCompilation(params);
             
-            // 钩子 make, 使用 compilation 对模块执行编译的
-            this.hooks.make.callAsync(compilation, err => {
-                // 钩子 finishMake
-                this.hooks.finishMake.callAsync(compilation, err => {
-                    process.nextTick(() => {
-                        
-                        // 执行compilation的 finsh 方法 对 module 上的错误或者警告处理
-                        compilation.finish(err => {
-                            
-                            // 执行 seal 对 module 代码进行封装输出
-                            compilation.seal(err => {
-                                
-                                // 钩子 afterCompile
-                                this.hooks.afterCompile.callAsync(compilation, err => {})
-                            })
-                        })
-                    })
-                })
-            })
+      // 钩子 make, 使用 compilation 对模块执行编译的
+      this.hooks.make.callAsync(compilation, err => {
+          // 钩子 finishMake
+          this.hooks.finishMake.callAsync(compilation, err => {
+              process.nextTick(() => {
+
+                  // 执行compilation的 finsh 方法 对 module 上的错误或者警告处理
+                  compilation.finish(err => {
+
+                      // 执行 seal 对 module 代码进行封装输出
+                      compilation.seal(err => {
+
+                          // 钩子 afterCompile
+                          this.hooks.afterCompile.callAsync(compilation, err => {})
+                      })
+                  })
+              })
+          })
+      })
         }
     }
 }
@@ -539,75 +613,9 @@ class Compiler {
 
 
 
-### 5、run() --> compile() 的一些 hook
+### run --> compile 的一些 hook
 
 ![](./imgs/img1.png)
-
-
-
-
-
-## tapable
-
-### 1、tapable 是什么
-
-`tapable`是`webpack`的核心模块，也是`webpack`团队维护的，是`webpack plugin`的基本实现方式。主要的作用就是：基于事件流程管理
-
-
-
-### 2、tapable 的基本使用
-
-以 AsyncSeriesHook这个 hook 为例：
-
-```js
-const { AsyncSeriesHook } = require("tapable")
-
-// 创建一个 SyncHook 类型的 hook
-const run = new AsyncSeriesHook(["compiler"])
-```
-
-SyncHook 就是 tapable 中提供的某一个用于创建某一类 hook 的类，通过 new 来生成实例。构造函数 constructor 接收一个数组，数组有多少项，**表示生成的这个实例注册回调的时候接收多少个参数**
-
-hook 的主要有两个实例：
-
-- `tap`：就是**注册事件回调**的方法
-- `call`：就是触发事件，**执行 tap 中回调的方法**
-
-所以有，注册事件回调：
-
-```js
-run.tapAsync('myRun', (compiler) => {
-    console.log(compiler)
-})
-```
-
-这样就通过 tab 把事件回调函数注册好了。而这个事件调用时机就是在执行 call 的时候调用
-
-```js
-run.callAsync(compiler)
-```
-
-执行 call，就会调用之前注册的回调，并把 compiler 当做参数传过去
-
-
-
-所以 tabpad 的使用主要就是三步：
-
-1. new 一个 hook 类
-2. 使用 tab 注册回调
-3. 在 call 的时候执行回调
-
-
-
-### 3、一些常用的 tapable hook
-
-可以参考 https://juejin.cn/post/6939794845053485093
-
-
-
-### 4、tapable 基本原理
-
-可以参考：https://juejin.cn/post/6946094725703139358
 
 
 
@@ -617,15 +625,15 @@ run.callAsync(compiler)
 
 - compiler：webpack 刚开始构建的时候就创建了，并且在整个 wbepack 的生命周期都存在
 
-- compilation：在准备编译某一个模块（例如 index.js）的时候才会创建，主要存在于 compile 到 make 这一段生命周期里面
+- compilation：单次构建的完整过程，主要存在于 compile 到 make 这一段生命周期里面
 
 问题：既然 compiler 存在于 webpack 整个生命周期，那么为什么不直接使用 compiler 而是要搞一个 compilation 出来？
 
->  比如，通过 watch 开启对文件的监听，如果文件发生变化，那就重新编译。如果这个时候使用 compiler，那么又要进行前面的一堆初始化操作，完全没有必要，只需要对文件重新编译就好，那么就可以创建一个新的 compilation 对文件重新编译。而如果修改了 webpack.config.js 文件，重新执行 npm run build，这个时候就需要使用 compiler 了。
+>  比如，通过 watch 开启对文件的监听，如果文件发生变化，那就重新编译。如果这个时候使用 compiler，那么又要进行前面的一堆初始化操作，完全没有必要，只需要对文件重新编译就好，那么就可以创建一个新的 compilation 对文件重新编译。而如果修改了 webpack.config.js 文件，重新执行 npm run build，这个时候就需要使用 compiler 了
 
 
 
-### 1、compilation 的创建
+### compilation 的创建
 
 回头看看 compiler.compile() 这个函数：
 
@@ -689,7 +697,7 @@ class Compiler {
 
 
 
-### 2、compilation 的调用时机
+### compilation 的调用时机
 
 回看上面 compiler.compile() 的代码：
 
@@ -725,7 +733,11 @@ class Compiler {
 
 这里面有一个非常重要的钩子调用，就是  this.hooks.make.callAsync，这个钩子里面就是真正使用 compilation 执行编译的。
 
+
+
 那么这个钩子是什么时候被注册的呢？
+
+
 
 1、createCompiler：
 
@@ -738,6 +750,8 @@ const createCompiler = rawOptions => {
     new WebpackOptionsApply().process(options, compiler);
 }
 ```
+
+
 
 2、WebpackOptionsApply().process() 
 
@@ -753,6 +767,8 @@ class WebpackOptionsApply extends OptionsApply {
     }
 }
 ```
+
+
 
 3、再看 EntryOptionPlugin().apply(compiler)
 
@@ -789,7 +805,15 @@ class EntryOptionPlugin {
 }
 ```
 
-可以看到，EntryOptionPlugin.apply() 主要做的事：就是调用了自身的 applyEntryOption 方法，里面对入口 entry 分情况处理，这里主要看 new EntryPlugin(context, entry, options).apply(compiler) 这个
+可以看到，EntryOptionPlugin.apply() 主要做的事：就是调用了自身的 applyEntryOption 方法，里面对入口 entry 分情况处理
+
+然后遍历入口（可能是多入口）调用 EntryPlugin 处理入口
+
+
+
+这里主要看 new EntryPlugin(context, entry, options).apply(compiler) 这个
+
+
 
 4、然后来到 EntryPlugin.apply()
 
@@ -816,9 +840,17 @@ class EntryPlugin {
 
 
 
-### 3、compilation 对模块的处理
+### compilation 对模块的处理
 
-由上面可知，compilation 是在 make 这个钩子里面执行的，而注册这个钩子的地方，绕了一圈，定位到了 lib\EntryPlugin.js 中 EntryPlugin 这个类的 apply 中 compiler.hooks.make.tapAsync 进行回调注册。现在接着从这个注册回调中分析：
+由上面可知，compilation 是在 make 这个钩子里面执行的，而注册这个钩子的地方，绕了一圈，定位到了 lib\EntryPlugin.js 中 EntryPlugin 这个类的 apply 中 compiler.hooks.make.tapAsync 进行回调注册。
+
+>为什么 make 钩子放到 EntryPlugin 中注册？
+>
+>因为 webpack 本身就是插件架构，那么处理入口文件自然交给 入口插件 处理。插件架构极大提高了代码的可扩展性
+
+
+
+现在接着从这个注册回调中分析：
 
 > webpack-master\lib\EntryPlugin.js
 
@@ -830,10 +862,10 @@ class EntryPlugin {
 		compiler.hooks.make.tapAsync("EntryPlugin", (compilation, callback) => {
 			const { entry, options, context } = this;
             
-            // 创建依赖
+      // 创建依赖
 			const dep = EntryPlugin.createDependency(entry, options);
             
-            // 通过 compilation 的 addEntry 添加入口，从入口开始编译
+      // 通过 compilation 的 addEntry 添加入口，从入口开始编译
 			compilation.addEntry(context, dep, options, err => {
 				callback(err);
 			});
@@ -893,16 +925,15 @@ class Compilation {
     addModuleTree({ context, dependency, contextInfo }, callback) {
         // ...
         
-        // 调用 handleModuleCreation 处理模块并
+        // 调用 handleModuleCreation 处理模块并对模块进行创建
         this.handleModuleCreation({}, err => {})
     }
 
     // 5
     handleModuleCreation(
-		{factory, dependencies, originModule, contextInfo, context, recursive = true},
-		callback
-    )
-    {
+		  {factory, dependencies, originModule, contextInfo, context, recursive = true},
+		  callback
+    ) {
         // 创建了模块图
         const moduleGraph = this.moduleGraph;
 		
@@ -911,7 +942,7 @@ class Compilation {
             {currentProfile,factory,dependencies,originModule,contextInfo,context},
             (err, newModule) => {
                 
-                /**
+         /**
 				 * compilation.factorizeModule 执行 factorizeQueue 的 add 方法将模块添加到 factorizeQueue 队列
 				 * factorizeQueue 通过 new AsyncQueue 得到
 				 * 
@@ -922,10 +953,10 @@ class Compilation {
 				 * 最后通过 compilation.addModule 添加 newModule 模块
 				 */
                 
-                // 9
-                this.addModule(newModule, (err, module) => {
+          // 9
+          this.addModule(newModule, (err, module) => {
                     
-                    /**
+           /**
 					 * compilation.addModule 执行 addModuleQueue.add 将模块添加到 addModuleQueue
 					 * addModuleQueue 通过 new AsyncQueue 创建
 					 * 
@@ -934,10 +965,10 @@ class Compilation {
 					 * 在 compilation.addModule 的回调中继续调用 compilation.buildModule
 					 */
                     
-                    // 12
-                    this.buildModule(module, err => {
+            // 12
+            this.buildModule(module, err => {
                         
-                        /**
+            /**
 						 * compilation.buildModule 执行 buildQueue.add 将 module 添加到 buildQueue
 						 * buildQueue 通过 new AsyncQueue 创建
 						 * 
@@ -1012,36 +1043,62 @@ class Compilation {
 ```
 
 1. compilation.addEntry：调用 compilation._addEntryItem 添加入口
-2.  compilation._addEntryItem：调用 addEntry 钩子。然后通过 compilation.addModuleTree 将当前的模块加入到 module tree(模块树)
+
+2. compilation._addEntryItem：调用 addEntry 钩子。然后通过 compilation.addModuleTree 将当前的模块加入到 module tree(模块树)
+
 3. compilation.addModuleTree：调用 compilation.handleModuleCreation 处理模块并对模块进行创建
+
 4. compilation.handleModuleCreation：
-   - 创建了模块图
-   - 调用 compilation.factorizeModule
+   - 通过 factorizeModule 将依赖转换为模块
+   
 5. compilation.factorizeModule：
    - 执行 factorizeQueue 的 add 方法将模块添加到 factorizeQueue 队列
-     - compilation.factorizeQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__factorizeModule=>factory.create()
-     - 最终就是使用 factory.create() 去创建 module，factory.create调用的是 normalModuleFacotry 的 create 方法，normalModuleFacotry .create 中做了：
+     - 调用链路
+     
+       ```text
+       compilation.factorizeQueue.add() --> setImmediate(root._ensureProcessing) --> AsyncQueue._ensureProcessing --> AsyncQueue._startProcessing --> compilation.__factorizeModule --> factory.create()
+       ```
+     
+       - 先将依赖添加进 factorizeQueue 队列
+     
+     - 最终就是使用 factory.create() 去创建 module，factory.create 调用的是 normalModuleFacotry 的 create 方法，normalModuleFacotry .create 中做了：
        - 触发 beforeResolve 事件
        - 触发 NormalModuleFactory 中的 factory 钩子。（在 NormalModuleFactory 的 constructor 中有一段注册 factory 事件的逻辑）执行 factory 逻辑，factory 做了两件事：
          - 获取文件的绝对路径、根据文件类型找到对应的 loaders、loaders 的绝对路径
          - 生成 normalModule 实例，并将文件路径和 loaders 路径存放到实例 conpilation 中
+     
    - 执行回调，回调中执行 compilation.addModule
+   
 6. compilation.addModule：
    - 执行 addModuleQueue.add 将模块添加到 addModuleQueue 队列
-     - compilation.addModuleQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__addModule
+     - 调用链路
+     
+       ```text
+       compilation.addModuleQueue.add() --> setImmediate(root._ensureProcessing) --> AsyncQueue._ensureProcessing --> AsyncQueue._startProcessing --> compilation.__addModule
+       ```
+     
      - 最终就是调用__addModule 方法将 module 添加到 compilation.modules 中，以便于在最后打包成 chunk 的时候使用
-   - 执行回调，回调中继续调用 compilation.buildModule
+     
+   - 执行回调，回调中最后调用 compilation.buildModule
+   
 7. compilation.buildModule：
    - 执行 addModuleQueue.add 将模块添加到 addModuleQueue 队列
-     - compilation.buildQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__buildModule
+     - 调用链路
+     
+       ```text
+       compilation.buildQueue.add() --> setImmediate(root._ensureProcessing) --> AsyncQueue._ensureProcessing --> AsyncQueue._startProcessing --> compilation.__buildModule
+       ```
+     
      - 最终就是通过 __buildModule 去编译模块
+
+
 
 其实 compilation 对模块进行处理，简单来说就是：
 
-1. compilation.addEntry=>compilation._addEntryItem，通过入口将模块添加到 module tree(模块树)
+1. compilation.addEntry --> compilation._addEntryItem，通过入口将模块添加到 module tree(模块树)
 2. 然后调用了 compilation.handleModuleCreation，在里面通过不断的回调，执行了以下几步：
    1. compilation.factorizeModule 系列：处理模块并对模块进行创建，并且添加到 factorizeQueue 队列
-   2. compilation.addModule 系列：添加 module 模块
+   2. compilation.addModule 系列：添加 module 模块到 addModuleQueue，建立模块与依赖的关系，更新模块图 moduleGraph
    3. compilation.buildModule 系列：准备编译
 
 
@@ -1052,7 +1109,7 @@ class Compilation {
 
 
 
-## 进行模块编译构建(build)
+## 模块编译构建(build)
 
 总的来说，build 阶段主要做的以下几件事：
 
@@ -1063,7 +1120,7 @@ class Compilation {
 
 
 
-### 1、从 compilation.buildModule 开始
+### compilation.buildModule
 
 模块的构建从 compilation.buildModule 开始
 
@@ -1071,52 +1128,66 @@ class Compilation {
 
 ```js
 class Compilation {
+
     conscructor() {
-		this.buildQueue = new AsyncQueue({
-			name: "build",
-			parent: this.factorizeQueue,
-			// processor：处理方法，调用 this._buildModule
-			processor: this._buildModule.bind(this)
-		});
+      // 创建一个 buildQueue，并将 _buildModule 方法传入
+      this.buildQueue = new AsyncQueue({
+        name: "build",
+        parent: this.factorizeQueue,
+        // processor：处理方法，调用 this._buildModule
+        processor: this._buildModule.bind(this)
+      });
     }
-    
+
     handleModuleCreation(
-		{factory, dependencies, originModule, contextInfo, context, recursive = true},
-		callback
-    )
-    {
-        this.factorizeModule(
-            {currentProfile,factory,dependencies,originModule,contextInfo,context},
-            (err, newModule) => {
+        {factory, dependencies, originModule, contextInfo, context, recursive = true},
+        callback
+      ) {
+          this.factorizeModule(
+              {currentProfile,factory,dependencies,originModule,contextInfo,context},
+              (err, newModule) => {
 
-                this.addModule(newModule, (err, module) => {
+                  this.addModule(newModule, (err, module) => {
 
-                    this.buildModule(module, err => {
-                        
-                        /**
-						 * compilation.buildModule 执行 buildQueue.add 将 module 添加到 buildQueue
-						 * buildQueue 通过 new AsyncQueue 创建
-						 * 
-						 * buildQueue.add=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation._buildModule
-						 * 
-						 * compilation._buildModule 里面执行 module.needBuild 判断模块需不需要构建
-						 * 需要构建，执行 module.needBuild 的回调，回调里面执行 module.build 对模块进行构建
-						 * this.buildModule 回调里面继续调用 compilation.processModuleDependencies
-						 */
-                        
-                        // 15
-                        this.processModuleDependencies(module, err => {
-                            
-                        })
-                    })
-                })
-            }
-        )
+                      this.buildModule(module, err => {
+
+                          /**
+               * compilation.buildModule 执行 buildQueue.add 将 module 添加到 buildQueue
+               * buildQueue 通过 new AsyncQueue 创建
+               * 
+               * buildQueue.add=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation._buildModule
+               * 
+               * compilation._buildModule 里面执行 module.needBuild 判断模块需不需要构建
+               * 需要构建，执行 module.needBuild 的回调，回调里面执行 module.build 对模块进行构建
+               * this.buildModule 回调里面继续调用 compilation.processModuleDependencies
+               */
+
+                          // 15
+                          this.processModuleDependencies(module, err => {
+
+                          })
+                      })
+                  })
+              }
+          )
+      }
+
+      buildModule(module, callback) {
+      this.buildQueue.add(module, callback);
     }
-    
-    buildModule(module, callback) {
-		this.buildQueue.add(module, callback);
-	}
+
+  	buildModule(module, callback) {
+      // ! 将模块添加到 buildQueue 队列，并且这里面会调用 _buildModule 进行模块的构建
+      // ! 因为创建 buildQueue 的时候，会传入 this._buildModule 方法
+      // ! 在执行 buildQueue.add 的时候，会调用 _buildModule 方法
+      // this.buildQueue = new AsyncQueue({
+      // 	name: "build",
+      // 	parent: this.factorizeQueue,
+      // 	processor: this._buildModule.bind(this)
+      // });
+      this.buildQueue.add(module, callback);
+    }
+
     _buildModule(module, callback) {
         // ...
         
@@ -1135,14 +1206,20 @@ class Compilation {
 }
 ```
 
-compilation.buildModule=>compilation.buildQueue.add()=>setImmediate(root._ensureProcessing)=>AsyncQueue._ensureProcessing=>AsyncQueue._startProcessing => compilation.__buildModule
+调用链路：
+
+```text
+compilation.buildModule --> compilation.buildQueue.add() --> setImmediate(root._ensureProcessing) --> AsyncQueue._ensureProcessing --> AsyncQueue._startProcessing --> compilation.__buildModule
+```
 
 可以看出最后是执行了 compilation.__buildModule，这个方法里面：
 
 - module.needBuild：判断当前模块需不需要构建，需要构建就执行回调
 - 回调中调用 module.build 对模块开始进行构建
 
-这里注意一下，module.build点进去是：
+
+
+这里注意一下，module.build 点进去是：
 
 ```js
 class Module extends DependenciesBlock  {
@@ -1181,7 +1258,7 @@ NormalModule 类继承于 Module 类，并重写了 build
 
 
 
-### 2、模块构建 build
+### 模块构建 build
 
 module.build 也就是 NormalModule 类的 build 方法：
 
@@ -1200,7 +1277,11 @@ class NormalModule extends Module {
 }
 ```
 
-NormalModule 类的 build 方法中将 doBuild 函数的结果返回。来到 doBuild 方法：
+NormalModule 类的 build 方法中将 doBuild 函数的结果返回
+
+
+
+来到 doBuild 方法：
 
 > webpack-master\lib\NormalModule.js
 
@@ -1262,11 +1343,11 @@ class NormalModule extends Module {
             return callback();
         })
 
-		runLoaders({}, (err, result) => {
-                // ...
-				processResult(err, result.result);
-			}
-		);
+        runLoaders({}, (err, result) => {
+          // ...
+
+          processResult(err, result.result);
+        });
     }
 }
 ```
@@ -1318,7 +1399,7 @@ class JavascriptParser extends Parser {
             onInsertedSemicolon: pos => semicolons.add(pos)
         });
         
-        if (this.hooks.program.call(ast, comments) === undefined) {
+    if (this.hooks.program.call(ast, comments) === undefined) {
 			this.detectMode(ast.body);
 			this.preWalkStatements(ast.body);
 			this.prevStatement = undefined;
@@ -1351,10 +1432,6 @@ class JavascriptParser extends Parser {
 2. 调用 `module` 对象的 `addDependency` 将依赖对象加入到 `module` 依赖列表中
 
 AST 遍历完毕后，调用 `module.handleParseResult` 处理模块依赖
-
-对于 `module` 新增的依赖，调用 `handleModuleCreate` ，递归解析依赖
-
-所有依赖都解析完毕后，构建阶段结束
 
 这个过程中数据流 `module => ast => dependences => module` ，先转 AST 再从 AST 找依赖
 
@@ -1437,7 +1514,9 @@ class Compilation {
 
 
 
-## 模块 module 封装输出
+## seal 封装优化
+
+
 
 > webpack-master\lib\Compiler.js
 
@@ -1524,7 +1603,7 @@ class Compilation {
                         // ...
                         
                         // 开始输出资源
-					    this.emitAsset(file, source, assetInfo);
+					              this.emitAsset(file, source, assetInfo);
                     },
                     callback
                 )
@@ -1534,52 +1613,54 @@ class Compilation {
     },
     
     // 当模块解析完，就来到了 seal 阶段，对处理过的代码进行封装输出
-	// 目的是将 module 生成 chunk，并封存到 compilation.assets 中
-	// 在这个过程可以做各种各样的优化
+	  // 目的是将 module 生成 chunk，并封存到 compilation.assets 中
+	  // 在这个过程可以做各种各样的优化
     seal(callback) {
-        // 生成 chunkGraph 实例
-		const chunkGraph = new ChunkGraph(this.moduleGraph);
+      // 生成 chunkGraph 实例
+		  const chunkGraph = new ChunkGraph(this.moduleGraph);
         
-        // 遍历 compilation.modules ，记录下模块与 chunk 关系
-        for (const module of this.modules) {
-			ChunkGraph.setChunkGraphForModule(module, chunkGraph);
-		}
+      // 遍历 compilation.modules ，记录下模块与 chunk 关系
+      for (const module of this.modules) {
+			  ChunkGraph.setChunkGraphForModule(module, chunkGraph);
+		  }
         
-        // 触发 seal 钩子
-		this.hooks.seal.call();
+      // 触发 seal 钩子
+      this.hooks.seal.call();
+
+      // 循环 this.entries 创建 chunks
+      for (const [name, { dependencies, includeDependencies, options }] of this.entries) {
+        // ...
+      }
         
-    // 循环 this.entries 创建 chunks
-    for (const [name, { dependencies, includeDependencies, options }] of this.entries) {
-      // ...
-    }
+      // ! 用于创建 chunkGraph
+      // ! 从入口模块开始，递归地将所有相关模块分配到 chunks 中, 建立模块间的连接关系
+      // ! 这一步很重要，因为这很大程度决定了哪些模块要合并到哪个 chunk 中（下面还有 SplitChunksPlugin 可以决定 chunk 划分）
+		  buildChunkGraph(this, chunkGraphInit);
         
-        // 用于创建 chunkGraph、moduleGraph
-		buildChunkGraph(this, chunkGraphInit);
+      // 触发钩子 optimize，代表优化开始
+		  this.hooks.optimize.call();
         
-        // 触发钩子 optimize，代表优化开始
-		this.hooks.optimize.call();
+      // 执行各种优化 module
+      while (this.hooks.optimizeModules.call(this.modules)) {
+        /* empty */
+      }
+      // 钩子 afterOptimizeModules，代表 module 已经优化完
+      this.hooks.afterOptimizeModules.call(this.modules);
+
+      // 执行各种优化 chunk
+      while (this.hooks.optimizeChunks.call(this.chunks, this.chunkGroups)) {
+        /* empty */
+      }
+      // 钩子 afterOptimizeChunks，代表 chunk 已经优化完
+      this.hooks.afterOptimizeChunks.call(this.chunks, this.chunkGroups);
         
-    // 执行各种优化 module
-		while (this.hooks.optimizeModules.call(this.modules)) {
-			/* empty */
-		}
-		// 钩子 afterOptimizeModules，代表 module 已经优化完
-		this.hooks.afterOptimizeModules.call(this.modules);
-		
-		// 执行各种优化 chunk
-		while (this.hooks.optimizeChunks.call(this.chunks, this.chunkGroups)) {
-			/* empty */
-		}
-		// 钩子 afterOptimizeChunks，代表 chunk 已经优化完
-		this.hooks.afterOptimizeChunks.call(this.chunks, this.chunkGroups);
-        
-        // 优化 modules 树
-        this.hooks.optimizeTree.callAsync(this.chunks, this.modules, err => {
+      // 优化 modules 树
+      this.hooks.optimizeTree.callAsync(this.chunks, this.modules, err => {
             
-            // 触发 afterOptimizeTree 钩子，代表 modules 树优化结束
+      // 触发 afterOptimizeTree 钩子，代表 modules 树优化结束
 			this.hooks.afterOptimizeTree.call(this.chunks, this.modules);
             
-            // 对代码进行优化阶段
+      // 对代码进行优化阶段
 			this.hooks.optimizeChunkModules.callAsync(
                 this.chunks,
                 this.modules,
@@ -1587,17 +1668,19 @@ class Compilation {
                     // 触发一系列各种优化的钩子，省略代码
                     
                     // 生成 module 的 hash
-					this.createModuleHashes();
+					          this.createModuleHashes();
                     
-                    //  调用 codeGeneration 方法用于生成编译好的代码
+                    // ! 为已经分配到 chunk 中的模块生成最终的 JavaScript 代码
+                    // ! 这是 webpack 从模块依赖图到实际输出资源的关键转换步骤
+                    // ! 经过上面的 buildChunkGraph 和 SplitChunksPlugin，知道哪些模块分配在哪些 chunk 中
                     this.codeGeneration(err => {
                         // 执行代码生成的方法 _runCodeGenerationJobs
-						// _runCodeGenerationJobs 中会执行 this._codeGenerationModule，这个方法会根据 tempalte 生成代码 
+						        // _runCodeGenerationJobs 中会执行 this._codeGenerationModule，这个方法会根据 tempalte 生成代码 
                         this._runCodeGenerationJobs(codeGenerationJobs, err => {
                             // ...
                             
                             // 创建 moduleAssets 资源
-							this.createModuleAssets();
+							              this.createModuleAssets();
                             
                             // 创建 chunkAssets 资源
                             // createChunkAssets 里面会调用 compilation.emitAsset 开始输出
@@ -1616,16 +1699,18 @@ class Compilation {
 1. 创建 chunkGraph 实例
 2. 遍历 compilation.modules ，记录下模块与 chunk 关系
 
-2. 循环 this.entries 入口文件创建 chunks
+3. 循环 this.entries 入口文件创建 chunks
 
-3. 执行各种优化 module、chunk、module tree
+4. buildChunkGraph 创建 ChunkGraph，这一步很重要，因为这很大程度决定了哪些模块要合并到哪个 chunk 中（后面还有 SplitChunksPlugin 可以决定 chunk 划分） 
 
-4. 调用 compilation.codeGeneration 方法用于生成编译好的代码
+5. 执行各种优化 module、chunk、module tree
 
-5. 执行代码生成的方法 compilation.\_runCodeGenerationJobs
+6. 调用 compilation.codeGeneration 方法用于生成编译好的代码
+
+7. 执行代码生成的方法 compilation.\_runCodeGenerationJobs
    - \_runCodeGenerationJobs 中会执行 compilation._codeGenerationModule，这个方法会根据 tempalte 生成代码
 
-6. 执行 compilation.createChunkAssets 创建 chunkAssets 资源，createChunkAssets 里面会调用 compilation.emitAsset 将生成的代码放到 compilation.assets 中，然后一路回调，最后的回调就是用的createChunkAssets(callback) 中的 callback，然后一路找回调，会发现最后调用的回调是 compilation.seal(callback)这里的，而 compilation.seal 在 compiler.compile 中被调用，此时，又回到了 compiler
+8. 执行 compilation.createChunkAssets 创建 chunkAssets 资源，createChunkAssets 里面会调用 compilation.emitAsset 将生成的代码放到 compilation.assets 中，然后一路回调，最后的回调就是用的createChunkAssets(callback) 中的 callback，然后一路找回调，会发现最后调用的回调是 compilation.seal(callback)这里的，而 compilation.seal 在 compiler.compile 中被调用，此时，又回到了 compiler
 
 这一步的关键逻辑是将 `module` 按规则组织成 `chunks` ，webpack 内置的 `chunk` 封装规则：
 
@@ -1633,6 +1718,10 @@ class Compilation {
 - 使用动态引入语句引入的模块，各自组合成一个 chunk（ 例如：import('./xxx/xx.js').then(res => {}) ）
 
 
+
+## emitAssets 输出
+
+执行完 compilation.seal 之后，会触发  afterCompile 钩子，这个钩子里面会调用 callback 函数
 
 ```js
 class Compiler {
@@ -1647,7 +1736,9 @@ class Compiler {
 }
 ```
 
-继续找回调，发现 compilation.seal 被  compiler.compile 调用时又使用了 compiler.compile 的 callback，再看看 compiler.compile 被调用的情况：
+
+
+再看看 compiler.compile 被调用的情况：
 
 ```js
 class Compiler {
@@ -1671,7 +1762,81 @@ class Compiler {
 }
 ```
 
-终于找到，compiler.compile 调用的时候传入了 onCompiled 作为回调，onCompiled  中调用 compiler.emitAssets 和 compiler.emitRecords 对资源做输出。
+
+
+可以看到，compiler.compile 调用的时候传入了 onCompiled 作为回调
+
+```js
+const onCompiled = (err, compilation) => {
+  if (err) return finalCallback(err);
+
+  process.nextTick(() => {
+    logger = compilation.getLogger("webpack.Compiler");
+    logger.time("emitAssets");
+
+    // ! 输出结果
+    this.emitAssets(compilation, err => {
+      logger.timeEnd("emitAssets");
+      if (err) return finalCallback(err);
+
+      if (compilation.hooks.needAdditionalPass.call()) {
+        compilation.needAdditionalPass = true;
+
+        compilation.startTime = startTime;
+        compilation.endTime = Date.now();
+        logger.time("done hook");
+        const stats = new Stats(compilation);
+        this.hooks.done.callAsync(stats, err => {
+          logger.timeEnd("done hook");
+          if (err) return finalCallback(err);
+
+          this.hooks.additionalPass.callAsync(err => {
+            if (err) return finalCallback(err);
+            this.compile(onCompiled);
+          });
+        });
+        return;
+      }
+
+
+      // ! 将本次构建的关键信息（如模块 ID、Chunk Hash 等）写入磁盘文件
+      // ! 供下次构建时复用，以实现增量构建的优化
+      this.emitRecords(err => {
+        logger.timeEnd("emitRecords");
+        if (err) return finalCallback(err);
+
+        compilation.startTime = startTime;
+        compilation.endTime = Date.now();
+        logger.time("done hook");
+
+        // ! 创建 stats 对象，用来存储 webpack 的统计信息
+        const stats = new Stats(compilation);
+
+        // ! 触发 done 钩子
+        this.hooks.done.callAsync(stats, err => {
+          logger.timeEnd("done hook");
+          if (err) return finalCallback(err);
+
+          // ! 将编译过程中的构建依赖信息保存到缓存中
+          // ! 构建依赖可能包括：配置文件、loader 脚本、插件代码等
+          this.cache.storeBuildDependencies(
+            compilation.buildDependencies,
+            err => {
+              if (err) return finalCallback(err);
+              return finalCallback(null, stats);
+            }
+          );
+        });
+      });
+    });
+  });
+};
+```
+
+onCompiled  中调用 compiler.emitAssets 和 compiler.emitRecords 对资源做输出
+
+- compiler.emitAssets：输出实际的构建产物（如JS、CSS文件）
+- compiler.emitRecords：输出构建元数据和记录信息，比如 stats 对象
 
 
 
@@ -1679,16 +1844,89 @@ class Compiler {
 
 
 
+## 产物形态
+
+`compiler.make` 阶段：
+
+- `entry` 文件以 `dependence` 对象形式加入 `compilation` 的依赖列表，`dependence` 对象记录了 `entry` 的类型、路径等信息；
+- 根据 `dependence` 调用对应的工厂函数创建 `module` 对象，之后读入 `module` 对应的文件内容，调用 `loader-runner` 对内容做转化，转化结果若有其它依赖则继续读入依赖资源，重复此过程直到所有依赖均被转化为 `module`。
+
+
+
+`compilation.seal` 阶段：
+
+- 遍历 `module` 集合，根据 `entry` 配置及引入资源的方式，将 `module` 分配到不同的 Chunk；
+- Chunk 之间最终形成 ChunkGraph 结构；
+- 遍历 ChunkGraph，调用 `compilation.emitAsset` 方法标记 `chunk` 的输出规则，即转化为 `assets` 集合
+
+
+
+`compiler.emitAssets` 阶段：
+
+- 将 `assets` 写入文件系统
+
+
+
 ## 总结
 
-在 Webpack 的主流程中,比较重要的几个节点：
 
-1. webpack()：执行 webpack 函数，
+
+**总结 webpack 流程：**
+
+1. 初始化阶段，核心任务：准备构建环境，创建核心对象
+   - **配置合并**：合并命令行参数、配置文件 (`webpack.config.js`) 和默认配置
+   - **创建 Compiler**：主控制器实例，管理整个构建生命周期
+   - **插件注册**：调用所有插件的 `apply` 方法，注入钩子监听
+
+2. 编译阶段，核心任务：
+   - **入口解析**：根据 `entry` 配置定位所有入口文件
+   - **模块加载**：
+     - 通过 `resolve` 解析文件绝对路径
+     - 使用 `loader` 转译源码（如 Babel 转译 JSX）
+   - **依赖收集**：分析 AST 提取 `import`/`require` 语句
+   - **创建模块记录**：生成包含源码、依赖、hash 的模块对象
+
+3. 优化阶段
+   - Tree Shaking
+   - 代码分割
+   - 持久化缓存
+
+4. 代码生成
+   - **运行时注入**：自动添加 `__webpack_require__` 等辅助函数
+   - **SourceMap 生成**：关联源码与生成代码
+
+5. 资源输出
+   - **文件生成**：通过 `compilation.assets` 管理所有输出资源
+   - **记录持久化**：保存 `records.json` 供增量构建使用
+
+
+
+**主流程中关键点：**
+
+1. **webpack()：执行 webpack 函数**
 2. createCompiler
-3. compiler.run()
-4. compiler.compile()
-5. compiler.hooks.make
-6. 
+3. **compiler.run()**
+4. **compiler.compile()**
+5. **compiler.hooks.make**
+6. compilation.addEntry 和 compilation._addEntryItem
+7. compilation.addModuleTree
+8. compilation.handleModuleCreation
+9. compilation.factorizeModule
+10. compilation.addModule
+11. **compilation.buildModule 和 compilation._buildModule**
+12. NormalModule.build 和 NormalModule.doBuild
+13. **runLoaders**
+14. **parser.parse**
+15. processDependenciesQueue
+16. **Compilation.seal**
+17. buildChunkGraph
+18. **codeGeneration 和 _runCodeGenerationJobs**
+19. onCompiled
+20. **emitAssets 和 emitRecords**
+
+
+
+其中，加粗的为重要的流程阶段
 
 
 
