@@ -572,6 +572,7 @@ class Compiler {
 	 * @param {Callback<void>} callback signals when the assets are emitted
 	 * @returns {void}
 	 */
+  // ! 输出结果
 	emitAssets(compilation, callback) {
 		let outputPath;
 
@@ -1095,7 +1096,7 @@ ${other}`);
 
 			logger.time("make hook");
 
-			// ! 触发钩子 make，这个钩子里面就是真正使用 compilation 执行编译的
+			// ! 触发钩子 make，这个钩子里面就是真正使用 compilation 单次构建的
       // ! hooks.make 钩子在 EntryPlugin 中定义
 			this.hooks.make.callAsync(compilation, err => {
 				logger.timeEnd("make hook");

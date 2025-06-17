@@ -211,9 +211,7 @@ run.callAsync(compiler)
 
 
 
-## compiler
-
-webpack 有两个主要的核心对象，一个是 compiler，另外一个是 compilation
+## 初始化阶段(init)
 
 
 
@@ -412,9 +410,9 @@ class WebpackOptionsApply extends OptionsApply {
           new ElectronTargetPlugin("main").apply(compiler);
         }
 
-            //... 这里是一堆根据 webpack.config.js 的配置转换成 plugin 的操作
+        //... 这里是一堆根据 webpack.config.js 的配置转换成 plugin 的操作
 
-            // 处理入口，将 entry: '', 转换成 EntryOptionPlugin 插件进行注入
+        // 处理入口，将 entry: '', 转换成 EntryOptionPlugin 插件进行注入
         new EntryOptionPlugin().apply(compiler);
         compiler.hooks.entryOption.call(options.context, options.entry);
 
@@ -635,13 +633,13 @@ class Compiler {
 
 
 
-### run --> compile 的一些 hook
+### run 到 compile 的钩子
 
 ![](./imgs/img1.png)
 
 
 
-## compilation
+### 创建 compilation
 
 首先，了解一下 compilation 以及它与 complier 的一个区别
 
@@ -655,8 +653,6 @@ class Compiler {
 
 
 
-### compilation 的创建
-
 回头看看 compiler.compile() 这个函数：
 
 > webpack-master\lib\Compiler.js
@@ -667,6 +663,7 @@ class Compiler {
 
     compile(callback) {
         // 初始化 compilation 的参数
+        // ! 会得到 normalModuleFactory 实例
 		    const params = this.newCompilationParams();
 
         this.hooks.beforeCompile.callAsync(params, err => {
@@ -715,13 +712,17 @@ class Compiler {
 }
 ```
 
-到此，终于可以知道 compilation 其实就是通过 new 一个 Compilation 类得来，并且把 compiler 本身传递给 Compilation 的构造函数 constructor
+可以知道 compilation 其实就是通过 new 一个 Compilation 类得来，并且把 compiler 本身传递给 Compilation 的构造函数 constructor
 
 
 
-### compilation 的调用时机
+## make 阶段
 
-回看上面 compiler.compile() 的代码：
+
+
+### 触发 make 钩子
+
+接下来，就是触发 make 钩子，使用 compilation 完成单次构建；回看上面 compiler.compile() 的代码：
 
 > webpack-master\lib\Compiler.js
 
@@ -744,20 +745,20 @@ class Compiler {
 			const compilation = this.newCompilation(params);
 
 
-			// 钩子 make，这个钩子里面就是真正使用 compilation 执行编译的
+			// 钩子 make，这个钩子里面就是真正使用 compilation 单次构建的
 			this.hooks.make.callAsync(compilation, err => {
-
+        // ...
 			});
 		});
 	}
 }
 ```
 
-这里面有一个非常重要的钩子调用，就是  this.hooks.make.callAsync，这个钩子里面就是真正使用 compilation 执行编译的。
+这里面有一个非常重要的钩子调用，就是  this.hooks.make.callAsync，这个钩子里面就是真正使用 compilation 单次构建的。
 
 
 
-那么这个钩子是什么时候被注册的呢？
+那么问题来了，这个钩子是什么时候被注册的呢？
 
 
 
@@ -799,41 +800,35 @@ class WebpackOptionsApply extends OptionsApply {
 ```js
 class EntryOptionPlugin {
     apply(compiler) {
-		compiler.hooks.entryOption.tap("EntryOptionPlugin", (context, entry) => {
-			EntryOptionPlugin.applyEntryOption(compiler, context, entry);
-			return true;
-		});
-	}
-    
+      compiler.hooks.entryOption.tap("EntryOptionPlugin", (context, entry) => {
+        EntryOptionPlugin.applyEntryOption(compiler, context, entry);
+        return true;
+      });
+    }
+
     static applyEntryOption(compiler, context, entry) {
-		if (typeof entry === "function") {
-			const DynamicEntryPlugin = require("./DynamicEntryPlugin");
-			new DynamicEntryPlugin(context, entry).apply(compiler);
-		} else {
-			const EntryPlugin = require("./EntryPlugin");
-			for (const name of Object.keys(entry)) {
-				const desc = entry[name];
-				const options = EntryOptionPlugin.entryDescriptionToOptions(
-					compiler,
-					name,
-					desc
-				);
-				for (const entry of desc.import) {
-					new EntryPlugin(context, entry, options).apply(compiler);
-				}
-			}
-		}
-	}
+      if (typeof entry === "function") {
+        // ... 动态入口
+        const DynamicEntryPlugin = require("./DynamicEntryPlugin");
+        new DynamicEntryPlugin(context, entry).apply(compiler);
+      } else {
+        const EntryPlugin = require("./EntryPlugin");
+        for (const name of Object.keys(entry)) {
+
+          // ...
+
+          for (const entry of desc.import) {
+            new EntryPlugin(context, entry, options).apply(compiler);
+          }
+        }
+      }
+    }
 }
 ```
 
 可以看到，EntryOptionPlugin.apply() 主要做的事：就是调用了自身的 applyEntryOption 方法，里面对入口 entry 分情况处理
 
-然后遍历入口（可能是多入口）调用 EntryPlugin 处理入口
-
-
-
-这里主要看 new EntryPlugin(context, entry, options).apply(compiler) 这个
+然后遍历入口（可能是多入口）调用 EntryPlugin 处理入口，EntryPlugin 很重要，这个是找到构建开始的入口文件
 
 
 
@@ -847,12 +842,13 @@ class EntryPlugin {
       // ...
 
 			compiler.hooks.make.tapAsync("EntryPlugin", (compilation, callback) => {
-		});
+        // ...
+		  });
 	}
 }
 ```
 
-终于找到了 compiler.hooks.make.tapAsync，这就是注册了 make hook 回调函数的地方
+可以看到 compiler.hooks.make.tapAsync，这就是注册了 make hook 回调函数的地方
 
 
 
@@ -862,9 +858,9 @@ class EntryPlugin {
 
 
 
-### compilation 对模块的处理
+### 添加入口模块
 
-由上面可知，compilation 是在 make 这个钩子里面执行的，而注册这个钩子的地方，绕了一圈，定位到了 lib\EntryPlugin.js 中 EntryPlugin 这个类的 apply 中 compiler.hooks.make.tapAsync 进行回调注册。
+由上面可知，注册 make 这个钩子的地方，绕了一圈，定位到了 lib\EntryPlugin.js 中 EntryPlugin 这个类的 apply 中：compiler.hooks.make.tapAsync 注册回调函数。
 
 >为什么 make 钩子放到 EntryPlugin 中注册？
 >
@@ -879,24 +875,24 @@ class EntryPlugin {
 ```js
 class EntryPlugin {
     apply(compiler) {
-        // ...
+      // ...
 
-		compiler.hooks.make.tapAsync("EntryPlugin", (compilation, callback) => {
-			const { entry, options, context } = this;
-            
-      // 创建依赖
-			const dep = EntryPlugin.createDependency(entry, options);
-            
-      // 通过 compilation 的 addEntry 添加入口，从入口开始编译
-			compilation.addEntry(context, dep, options, err => {
-				callback(err);
-			});
-		});
-	}
+      compiler.hooks.make.tapAsync("EntryPlugin", (compilation, callback) => {
+        const { entry, options, context } = this;
+
+        // 创建依赖
+        const dep = EntryPlugin.createDependency(entry, options);
+
+        // 通过 compilation 的 addEntry 添加入口，从入口开始编译
+        compilation.addEntry(context, dep, options, err => {
+          callback(err);
+        });
+      });
+    }
 }
 ```
 
-可以看到，这个注册回调函数里面调用了 compilation.addEntry()，这个 Compilation 类里面的 addEntry 主要的作用就是添加入口模块
+可以看到，这个注册回调函数里面调用了 compilation.addEntry，这个 Compilation 类里面的 addEntry 主要的作用就是添加入口模块
 
 > webpack-master\lib\Compilation.js
 
@@ -1013,23 +1009,23 @@ class Compilation {
      
     // 7
     factorizeModule(options, callback) {
-		this.factorizeQueue.add(options, callback);
-	}
+		  this.factorizeQueue.add(options, callback);
+	  }
     // 8
     _factorizeModule(
-		{currentProfile,factory,dependencies,originModule,contextInfo,context},
-		callback
-	) 
-    {
-        // 对模块进行解析【执行NormalModuleFactory实例上的create方法】
-		factory.create({}, (err, result) => {})
+      {currentProfile,factory,dependencies,originModule,contextInfo,context},
+      callback
+    ) {
+      // 对模块进行解析【执行NormalModuleFactory实例上的create方法】
+		  factory.create({}, (err, result) => {})
     }
     
     // 10
     addModule(module, callback) {
-		// 将模块添加到 addModuleQueue
-		this.addModuleQueue.add(module, callback);
-	}
+      // 将模块添加到 addModuleQueue
+      this.addModuleQueue.add(module, callback);
+    }
+
     // 11
     _addModule(module, callback) {
         // ...
@@ -1043,8 +1039,8 @@ class Compilation {
     
     // 13
     buildModule(module, callback) {
-		this.buildQueue.add(module, callback);
-	}
+      this.buildQueue.add(module, callback);
+    }
     // 14
     _buildModule(module, callback) {
         // ...
@@ -1064,6 +1060,8 @@ class Compilation {
 }
 ```
 
+总结 compilation.addEntry 添加入口模块流程：
+
 1. compilation.addEntry：调用 compilation._addEntryItem 添加入口
 
 2. compilation._addEntryItem：调用 addEntry 钩子。然后通过 compilation.addModuleTree 将当前的模块加入到 module tree(模块树)
@@ -1072,7 +1070,7 @@ class Compilation {
 
 4. compilation.handleModuleCreation：
    - 通过 factorizeModule 将依赖转换为模块
-   
+
 5. compilation.factorizeModule：
    - 执行 factorizeQueue 的 add 方法将模块添加到 factorizeQueue 队列
      - 调用链路
@@ -1090,7 +1088,7 @@ class Compilation {
          - 生成 normalModule 实例，并将文件路径和 loaders 路径存放到实例 conpilation 中
      
    - 执行回调，回调中执行 compilation.addModule
-   
+
 6. compilation.addModule：
    - 执行 addModuleQueue.add 将模块添加到 addModuleQueue 队列
      - 调用链路
@@ -1102,7 +1100,7 @@ class Compilation {
      - 最终就是调用__addModule 方法将 module 添加到 compilation.modules 中，以便于在最后打包成 chunk 的时候使用
      
    - 执行回调，回调中最后调用 compilation.buildModule
-   
+
 7. compilation.buildModule：
    - 执行 addModuleQueue.add 将模块添加到 addModuleQueue 队列
      - 调用链路
@@ -1125,7 +1123,7 @@ class Compilation {
 
 
 
-简单的流程图：
+添加入口流程图：
 
 ![](./imgs/img3.png)
 
@@ -1133,11 +1131,11 @@ class Compilation {
 
 ## 模块编译构建(build)
 
-总的来说，build 阶段主要做的以下几件事：
+build 阶段主要做的以下几件事：
 
 - 使用 loader-runner 运行 Loader
 - Parser 解析出 AST
-- walkStatements 解析出依赖
+- blockPreWalkStatements 解析是否有依赖
 - 如果当前模块有依赖，那么继续递归进行 build 流程
 
 
