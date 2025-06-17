@@ -1,10 +1,6 @@
 # webpack 源码阅读
 
-基于 webpack5.24
-
-
-
-webpack 核心流程如下：
+基于 webpack5.24。核心流程如下：
 
 ![](./imgs/img7.png)
 
@@ -247,9 +243,9 @@ const webpack = (options, callback) => {
     }
     
     /**
-	* 判断在执行 webpack 函数的时候，有没有传入 callback 回调函数
-	* 无论有没有传入回调函数，结果都是会返回一个 compiler 对象
-	*/
+    * 判断在执行 webpack 函数的时候，有没有传入 callback 回调函数
+    * 无论有没有传入回调函数，结果都是会返回一个 compiler 对象
+    */
     if (callback) {
         try {
             const { compiler, watch, watchOptions } = create();
@@ -290,7 +286,7 @@ const webpack = (options, callback) => {
   - 里面还有一层判断 config 文件有没有配置 watch，如果有，会监听文件改变，重新编译
 - 没有传入 callback，通过 create 函数拿到 compiler 对象，直接返回 compiler 
 
-所以，我们在调用 weback 函数的时候，callback 可以传也可以不传，不传 callback 就需要手动调用一下 compiler.run，例如：
+所以，在调用 weback 函数的时候，callback 可以传也可以不传，不传 callback 就需要手动调用一下 compiler.run，例如：
 
 ```js
 const compiler = webpack(config)
@@ -342,6 +338,7 @@ const createCompiler = rawOptions => {
 			}
 		}
 	}
+
 	applyWebpackOptionsDefaults(options);
 
 	// 调用 compiler 身上的两个钩子 environment、afterEnvironment
@@ -468,6 +465,15 @@ class Compiler {
 
 
 
+## compile 准备阶段
+
+compile 准备阶段主要就是：
+
+- 触发开始编译前的一些钩子
+- 创建 compilation
+
+
+
 ### compiler.run
 
 再回到 build.js 文件 和 webpack() 这个函数：
@@ -523,43 +529,43 @@ class Compiler {
     // ...
 
     run(callback) {
-    // ...
-        
-    // 处理错误的函数
-		const finalCallback = (err, stats) => {
       // ...
-            
-			if (err) {
-				this.hooks.failed.call(err);
-			}
-			this.hooks.afterDone.call(stats);
-		};
-        
-    // 定义了一个 onCompiled 函数，主要是传给 this.compile 作为执行的回调函数
-    const onCompiled = (err, compilation) => {}
-        
-    // run，主要是流程： beforeRun 钩子 --> run 钩子 --> this.compile
-		// 如果遇到 error，就执行 finalCallback
-		// 这里调用 beforeRun、run 主要就是提供 plugin 执行时机
-		const run = () => {
-            // 执行 this.hooks.beforeRun.callAsync，那么在 beforeRun 阶段注册的 plugin 就会在这时执行
-			this.hooks.beforeRun.callAsync(this, err => {
-				if (err) return finalCallback(err);
-                
-                // this.hooks.run.callAsync，在 run 阶段注册的 plugin 就会在这时执行
-				this.hooks.run.callAsync(this, err => {
-					if (err) return finalCallback(err);
 
-					this.readRecords(err => {
-						if (err) return finalCallback(err);
+      // 处理错误的函数
+      const finalCallback = (err, stats) => {
+        // ...
 
-						this.compile(onCompiled);
-					});
-				});
-			});
-		};
-        
-    run();
+        if (err) {
+          this.hooks.failed.call(err);
+        }
+        this.hooks.afterDone.call(stats);
+      };
+
+      // 定义了一个 onCompiled 函数，主要是传给 this.compile 作为执行的回调函数
+      const onCompiled = (err, compilation) => {}
+
+      // run，主要是流程： beforeRun 钩子 --> run 钩子 --> this.compile
+      // 如果遇到 error，就执行 finalCallback
+      // 这里调用 beforeRun、run 主要就是提供 plugin 执行时机
+      const run = () => {
+        // 执行 this.hooks.beforeRun.callAsync，那么在 beforeRun 阶段注册的 plugin 就会在这时执行
+        this.hooks.beforeRun.callAsync(this, err => {
+          if (err) return finalCallback(err);
+
+            // this.hooks.run.callAsync，在 run 阶段注册的 plugin 就会在这时执行
+            this.hooks.run.callAsync(this, err => {
+              if (err) return finalCallback(err);
+
+              this.readRecords(err => {
+                if (err) return finalCallback(err);
+
+                this.compile(onCompiled);
+              });
+            });
+          });
+        };
+
+        run();
     }
 }
 ```
@@ -586,8 +592,8 @@ class Compiler {
     // ...
     
     compile(callback) {
-        // 初始化 compilation 的参数
-		const params = this.newCompilationParams();
+      // 初始化 compilation 的参数
+		  const params = this.newCompilationParams();
         
       // 钩子 beforeCompile
       this.hooks.beforeCompile.callAsync(params, err => {
@@ -717,6 +723,11 @@ class Compiler {
 
 
 ## make 阶段
+
+make 阶段主要做的事：
+
+- 分析入口文件
+- 创建模块对象
 
 
 
@@ -1278,7 +1289,7 @@ NormalModule 类继承于 Module 类，并重写了 build
 
 
 
-### 模块构建 build
+### NormalModule.build
 
 module.build 也就是 NormalModule 类的 build 方法：
 
@@ -1327,15 +1338,15 @@ class NormalModule extends Module {
             context: loaderContext,
             // processResource：需要做的进一步操作
             processResource: (loaderContext, resource, callback) => {
-                        // ...
+                // ...
 
-                        loaderContext.addDependency(resource);
-                        // 读取模块文件
-                        fs.readFile(resource, callback);
+                loaderContext.addDependency(resource);
+                // 读取模块文件
+                fs.readFile(resource, callback);
             }
           },
           (err, result) => {
-                    // ...
+            // ...
             processResult(err, result.result);
           }
         );
